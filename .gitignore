@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Copied by @coderline/alphatab-vite at dev/build time; regenerated from
+# node_modules, not source.
+public/font
+public/soundfont
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
