@@ -10,7 +10,8 @@ Read `CONTEXT.md` before naming a Project, Measure, Note, Save, Auto-save, or Ex
 
 - **Extraction vs. manual entry, no backend** — before adding any video/audio/image processing or a server: [0001](docs/adr/0001-manual-entry-not-automated-extraction.md)
 - **Rendering engine** — before picking or swapping the notation-rendering library: [0002](docs/adr/0002-alphatab-rendering-engine.md)
-- **v1 scope** — before adding multi-track, file import, playback, or technique symbols: [0003](docs/adr/0003-v1-scope-boundaries.md)
+- **v1 scope** — before adding multi-track, file import, playback, technique symbols, a time-signature UI, or Undo/Redo: [0003](docs/adr/0003-v1-scope-boundaries.md)
+- **Note editing model** — before touching how placing/deleting a note works: [0004](docs/adr/0004-overwrite-note-editing.md)
 
 ## Tech stack
 
