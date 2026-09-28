@@ -1,32 +1,77 @@
-# React + TypeScript + Vite
+# Bass Tab Editor
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+브라우저에서 직접 베이스 기타 탭(TAB) 악보를 클릭으로 입력하는 편집기입니다. 유튜브 영상이나 음원을 들으면서 참고해 직접 입력하는 용도로 만들어졌고, 영상/오디오를 자동으로 분석해서 악보를 뽑아주는 도구는 **아닙니다** (그 방식은 검토 후 포기했어요 — [ADR-0001](docs/adr/0001-manual-entry-not-automated-extraction.md) 참고).
 
-Currently, two official plugins are available:
+## 실행 방법
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install     # 최초 1회
+npm run dev     # 개발 서버 실행 (터미널에 뜨는 주소를 브라우저로 열기)
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+기타 명령어:
+
+```bash
+npm test        # 테스트 실행
+npm run build   # 프로덕션 빌드
+npm run lint    # 린트
+```
+
+## 사용법
+
+화면 구성은 위에서부터 **입력 그리드 → (음표 선택 시) 길이 툴바 → 악보 미리보기 → "+ Add measure" 버튼** 순서입니다.
+
+### 그리드 읽는 법
+
+한 마디는 **4줄(현) × 16칸(박자 단위)** 그리드로 표시됩니다.
+
+- 세로 방향(줄): 위에서부터 1번 줄(가장 높은 음, G현) ~ 4번 줄(가장 낮은 음, E현) — 실제 탭 악보를 읽는 순서와 같습니다.
+- 가로 방향(칸): 한 칸 = 16분음표 한 개 길이. 4분음표는 4칸, 8분음표는 2칸을 차지합니다.
+
+### 음표 입력하기
+
+1. 원하는 줄·칸을 클릭하면 그 자리에 작은 입력창이 뜹니다.
+2. 프렛 번호를 숫자로 입력합니다 (두 자리도 가능, 예: `12`).
+3. **Enter**를 누르거나 **다른 곳을 클릭**하면 입력이 확정됩니다.
+4. 아무것도 입력하지 않고 확정하면 그 자리는 원래 상태 그대로 남습니다.
+
+이미 음표가 있는 칸을 클릭해도 똑같이 입력창이 뜨는데, 이번엔 **비어 있는 입력창**으로 열립니다. 새 숫자를 입력하면 기존 프렛 값이 덮어써집니다.
+
+> 같은 칸(같은 박자 위치)에 다른 줄을 클릭해서 새 음표를 넣으면, 원래 있던 음표는 지워지고 새 음표로 바뀝니다. 베이스 탭은 한 번에 한 음만 내는 게 보통이라 이렇게 동작합니다.
+
+### 음표 길이 바꾸기
+
+이미 입력된 음표를 클릭해서 선택하면, 그리드 위에 길이 아이콘 툴바(`1/1` `1/2` `1/4` `1/8` `1/16`)가 나타납니다. 원하는 길이를 클릭하면 프렛 값은 그대로 두고 길이만 바뀝니다.
+
+### 쉼표 넣기
+
+빈 칸을 클릭해 입력창을 연 상태에서 **스페이스바**를 누르면, 그 자리에 기본 길이(8분음표)만큼 쉼표가 들어갑니다. (이미 음표가 선택된 상태에서는 실수로 지우는 걸 막기 위해 스페이스바가 동작하지 않습니다 — 삭제는 아래 방법을 쓰세요.)
+
+### 음표 지우기
+
+음표를 클릭해서 선택한 뒤 **Backspace** 또는 **Delete**를 누르면, 같은 길이의 쉼표로 바뀝니다. 마디의 다른 음표 위치는 전혀 움직이지 않습니다.
+
+(입력창에 숫자를 이미 타이핑한 상태라면 Backspace는 평소처럼 그 숫자만 지웁니다 — 음표 삭제로 오작동하지 않습니다.)
+
+### 마디 추가하기
+
+화면 맨 아래 **"+ Add measure"** 버튼을 누르면 새 빈 마디(4/4박자)가 추가됩니다. 마디는 이 버튼으로만 늘어나고, 자동으로 생기지 않습니다.
+
+## 지금 버전에서 안 되는 것 (의도된 범위)
+
+- 마디마다 다른 박자표 설정 (전부 4/4 고정)
+- 실행취소(Undo/Redo)
+- 여러 트랙(베이스 외 다른 악기), 파일 불러오기, 재생 기능, 슬라이드/벤딩 같은 주법 기호
+- 저장/불러오기, PDF·JPG 내보내기 *(다음 작업 예정)*
+
+자세한 이유는 [`docs/adr/0003-v1-scope-boundaries.md`](docs/adr/0003-v1-scope-boundaries.md) 참고.
+
+## 알려진 이슈
+
+개발 환경에 따라 악보 미리보기(AlphaTab)가 간헐적으로 안 그려질 때가 있습니다. 프로젝트 경로에 한글·공백이 섞여 있으면 브라우저가 악보 렌더링용 웹 워커를 로드하다가 멈추는 것으로 보이는데, 아직 원인을 확정하지는 못했습니다. **이럴 땐 페이지를 새로고침**해보세요. 그리드에 입력한 내용 자체는 영향받지 않습니다.
+
+## 더 알아보기
+
+- 도메인 용어(Project/Measure/Note 등): [`CONTEXT.md`](CONTEXT.md)
+- 설계 결정 기록: [`docs/adr/`](docs/adr/)
+- 진행 중인 스펙/작업 단위: [`.scratch/note-editing/`](.scratch/note-editing/)
