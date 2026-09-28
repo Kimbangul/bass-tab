@@ -1,7 +1,15 @@
 import { AlphaTabApi } from "@coderline/alphatab";
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import { addMeasure, changeDuration, createEmptyMeasure, DEFAULT_DURATION, placeNoteAt, placeRestAt } from "./domain/editing";
+import {
+  addMeasure,
+  changeDuration,
+  createEmptyMeasure,
+  DEFAULT_DURATION,
+  deleteNoteAt,
+  placeNoteAt,
+  placeRestAt,
+} from "./domain/editing";
 import type { Duration, Project, StringNumber } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
@@ -70,6 +78,14 @@ function App() {
     });
   }
 
+  function handleDeleteNote(measureIndex: number, tick: number) {
+    setProject((prev) => {
+      const measures = [...prev.measures];
+      measures[measureIndex] = deleteNoteAt(measures[measureIndex], tick);
+      return { ...prev, measures };
+    });
+  }
+
   function handleAddMeasure() {
     setProject((prev) => addMeasure(prev));
   }
@@ -84,6 +100,7 @@ function App() {
           onPlaceNote={(tick, string, fret) => handlePlaceNote(index, tick, string, fret)}
           onPlaceRest={(tick) => handlePlaceRest(index, tick)}
           onChangeDuration={(tick, duration) => handleChangeDuration(index, tick, duration)}
+          onDeleteNote={(tick) => handleDeleteNote(index, tick)}
         />
       ))}
       <button type="button" onClick={handleAddMeasure}>

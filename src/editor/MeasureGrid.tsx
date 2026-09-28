@@ -22,6 +22,7 @@ interface Props {
   onPlaceNote: (tick: number, string: StringNumber, fret: number) => void;
   onPlaceRest: (tick: number) => void;
   onChangeDuration: (tick: number, duration: Duration) => void;
+  onDeleteNote: (tick: number) => void;
 }
 
 function sameCell(a: Cell | null, b: Cell): boolean {
@@ -41,13 +42,20 @@ function noteStartingAt(range: TickRange | undefined, cell: Cell) {
 /**
  * One Measure as a 4-string x 16-tick clickable grid (ADR-0004: overwrite
  * model). Clicking any cell - Rest or Note - selects it and opens an empty
- * inline fret entry there; typing digits and pressing Enter (or clicking
- * elsewhere) confirms and overwrites whatever was at that position through
- * `placeNoteAt`. An empty confirm (nothing typed) leaves the cell as it
- * was. Selecting a different cell moves the selection - only one cell is
- * ever being edited at a time.
+ * inline fret entry there. From there:
+ * - Digits + Enter (or clicking elsewhere) overwrite whatever was at that
+ *   position with a Note, through `placeNoteAt`. An empty confirm (nothing
+ *   typed) leaves the cell as it was.
+ * - Space places a Rest instead, through `placeRestAt` - only on an empty
+ *   cell; a no-op on a selected Note (see ticket 05 for deleting one).
+ * - On a selected Note, a duration-icon toolbar also appears
+ *   (`changeDuration`), and Backspace/Delete (once the input is empty)
+ *   replaces it with a Rest of its own duration (`deleteNoteAt`) rather
+ *   than editing the fret entry's text.
+ * Selecting a different cell moves the selection - only one cell is ever
+ * being edited at a time.
  */
-export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuration }: Props) {
+export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuration, onDeleteNote }: Props) {
   const ranges = tickRangesOf(measure);
   const [editingCell, setEditingCell] = useState<Cell | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -99,6 +107,14 @@ export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuratio
   function confirmRest() {
     if (selectedNote) return;
     confirm((cell) => onPlaceRest(cell.tick));
+  }
+
+  // Backspace/Delete replaces the selected Note with a Rest of its own
+  // duration (ticket 05) - only meaningful when a Note is actually
+  // selected; on an empty cell there's nothing to delete.
+  function confirmDelete() {
+    if (!selectedNote) return;
+    confirm((cell) => onDeleteNote(cell.tick));
   }
 
   function handleCellClick(cell: Cell) {
@@ -170,6 +186,13 @@ export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuratio
                       if (e.key === " ") {
                         e.preventDefault();
                         confirmRest();
+                      }
+                      // Only once the input is empty - otherwise Backspace
+                      // edits a fret digit the user is retyping, same as
+                      // any normal text field.
+                      if ((e.key === "Backspace" || e.key === "Delete") && inputValue === "") {
+                        e.preventDefault();
+                        confirmDelete();
                       }
                     }}
                   />

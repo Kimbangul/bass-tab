@@ -100,6 +100,15 @@ export function placeRestAt(measure: Measure, tick: number, duration: Duration):
   return overwriteSlotAt(measure, tick, { kind: "rest", duration });
 }
 
+/** The Note that starts exactly at `tick`, or null if there isn't one
+ * (a Rest is there, or `tick` falls inside a Note's span without being its
+ * start). Shared by changeDuration and deleteNoteAt below, which both need
+ * "is this tick a Note's start" to mean the same thing. */
+function noteStartingAt(measure: Measure, tick: number): Note | null {
+  const range = tickRangesOf(measure).find((r) => r.start === tick);
+  return range?.slot.kind === "note" ? range.slot : null;
+}
+
 /**
  * Changes the duration of the Note starting at `tick`, leaving its string
  * and fret untouched. A no-op if `tick` isn't exactly where a Note starts
@@ -109,10 +118,22 @@ export function placeRestAt(measure: Measure, tick: number, duration: Duration):
  * overlaps, the same overwrite rules as placeNoteAt (ADR-0004).
  */
 export function changeDuration(measure: Measure, tick: number, duration: Duration): Measure {
-  const range = tickRangesOf(measure).find((r) => r.start === tick);
-  if (!range || range.slot.kind !== "note") return measure;
+  const note = noteStartingAt(measure, tick);
+  if (!note) return measure;
 
-  return placeNoteAt(measure, tick, { ...range.slot, duration });
+  return placeNoteAt(measure, tick, { ...note, duration });
+}
+
+/**
+ * Deletes the Note starting at `tick`, replacing it with a Rest of the same
+ * duration - its slot stays put, nothing shifts (ADR-0004). A no-op if
+ * `tick` isn't exactly where a Note starts.
+ */
+export function deleteNoteAt(measure: Measure, tick: number): Measure {
+  const note = noteStartingAt(measure, tick);
+  if (!note) return measure;
+
+  return placeRestAt(measure, tick, note.duration);
 }
 
 /**

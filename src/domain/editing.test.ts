@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMeasure, changeDuration, placeNoteAt, placeRestAt } from "./editing";
+import { addMeasure, changeDuration, deleteNoteAt, placeNoteAt, placeRestAt } from "./editing";
 import type { Measure, Project } from "./project";
 import { STANDARD_BASS_TUNING } from "./project";
 
@@ -136,6 +136,15 @@ describe("changeDuration", () => {
     expect(changeDuration(measure, 0, "quarter")).toEqual(measure);
     expect(changeDuration(measure, 4, "quarter")).toEqual(measure);
   });
+
+  it("does nothing when tick falls inside a Note's span without being its start", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [{ kind: "note", string: 1, fret: 3, duration: "quarter" }], // ticks 0-4
+    };
+
+    expect(changeDuration(measure, 2, "eighth")).toEqual(measure);
+  });
 });
 
 describe("placeRestAt", () => {
@@ -189,5 +198,42 @@ describe("addMeasure", () => {
       timeSignature: { numerator: 4, denominator: 4 },
       slots: [{ kind: "rest", duration: "whole" }],
     });
+  });
+});
+
+describe("deleteNoteAt", () => {
+  it("replaces the Note at tick with a Rest of the same duration, leaving neighbors alone", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [
+        { kind: "note", string: 1, fret: 3, duration: "eighth" }, // ticks 0-2
+        { kind: "note", string: 2, fret: 5, duration: "quarter" }, // ticks 2-6
+      ],
+    };
+
+    const result = deleteNoteAt(measure, 2);
+
+    expect(result.slots).toEqual([
+      { kind: "note", string: 1, fret: 3, duration: "eighth" },
+      { kind: "rest", duration: "quarter" },
+    ]);
+  });
+
+  it("does nothing when tick isn't the start of a Note", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [{ kind: "rest", duration: "whole" }],
+    };
+
+    expect(deleteNoteAt(measure, 0)).toEqual(measure);
+  });
+
+  it("does nothing when tick falls inside a Note's span without being its start", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [{ kind: "note", string: 1, fret: 3, duration: "quarter" }], // ticks 0-4
+    };
+
+    expect(deleteNoteAt(measure, 2)).toEqual(measure);
   });
 });
