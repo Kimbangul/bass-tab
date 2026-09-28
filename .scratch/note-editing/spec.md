@@ -13,7 +13,7 @@ Add an interactive grid to the editor: each Measure renders as 4 rows (one per s
 ## User Stories
 
 1. As a bass player transcribing a song, I want to click an empty grid cell and type a fret number, so that I can enter a Note at that exact string and time position.
-2. As a bass player, I want a new Note to default to a preset duration (eighth note) so that I don't have to choose a length before every entry.
+2. As a bass player, I want a new Note to default to a preset duration (sixteenth note - one grid cell) so that I don't have to choose a length before every entry, and so that any cell I click creates an independent Note instead of accidentally editing whichever Note's span happens to reach that far.
 3. As a bass player, I want to click a cell that already holds a Note and immediately type a new fret number to overwrite it, so that fixing a mistake doesn't require a separate "edit mode."
 4. As a bass player, I want to select a placed Note and change its duration from a toolbar of duration icons, so that I can correct the rhythm without retyping the fret.
 5. As a bass player, I want to press the spacebar on a selected/targeted cell to insert a Rest of the current default duration, so that I can mark silence without typing a fret.
@@ -40,7 +40,8 @@ Add an interactive grid to the editor: each Measure renders as 4 rows (one per s
 - **Overflow**: placing a Note/Rest whose duration exceeds a Measure's remaining declared capacity is allowed, not blocked. A Measure's total slot duration is never validated against its time signature (ADR-0004).
 - **Click behavior**:
   - Empty cell → an inline numeric input opens at that cell; typing digits and pressing Enter (or clicking elsewhere) confirms and calls `placeNoteAt` with the default duration.
-  - Occupied cell → selects it (shows the duration toolbar) and typing digits overwrites its fret through the same confirm path.
+  - Occupied cell (its own start tick) → selects it (shows the duration toolbar) and typing digits overwrites its fret through the same confirm path.
+  - A later tick of a Note's own span (e.g. the second tick of an eighth note) is disabled - grayed out, not clickable - rather than redirecting the click back to the Note's start. Real use found the redirect confusing: with the original eighth-note default, clicking the very next cell silently edited the previous Note instead of creating a new one, which read as "my input got erased." A different string at that same tick stays clickable (ADR-0004 overwrite still applies there).
 - **Rest entry**: pressing Space on a selected/targeted cell calls `placeRestAt` with the current default duration.
 - **Delete**: Backspace/Delete on a selected Note calls `deleteNoteAt`, which replaces it with a Rest of the same duration.
 - **Duration change**: selecting a Note shows a small toolbar of duration icons (whole through sixteenth); clicking one calls `changeDuration`.

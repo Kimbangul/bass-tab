@@ -5,7 +5,17 @@
 
 import type { Duration, Measure, MeasureSlot, Note, Project, TimeSignature } from "./project";
 
-export const DEFAULT_DURATION: Duration = "eighth";
+// Sixteenth, not eighth: a default Note then occupies exactly one grid cell,
+// so every cell click creates an independent Note. A default wider than one
+// cell meant clicking the very next cell silently edited the previous Note
+// instead of creating a new one - confusing in practice (real usage found
+// this, see the /grilling session that led to disabling continuation cells
+// in MeasureGrid below). This reasoning is specific to Notes - a Rest has no
+// fret identity for a neighboring click to clobber, so DEFAULT_REST_DURATION
+// keeps the original, more space-efficient default instead of picking up
+// this change too.
+export const DEFAULT_NOTE_DURATION: Duration = "sixteenth";
+export const DEFAULT_REST_DURATION: Duration = "eighth";
 
 const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
 

@@ -41,6 +41,11 @@
   outline-color: #0078ff;
 }
 
+.measure-grid-cell.disabled {
+  background: #e0e0e0;
+  cursor: not-allowed;
+}
+
 .duration-toolbar {
   display: flex;
   gap: 0.25rem;

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { DURATIONS_LARGEST_FIRST, tickRangesOf, type TickRange } from "../domain/editing";
-import type { Duration, Measure, StringNumber } from "../domain/project";
+import type { Duration, Measure, Note, StringNumber } from "../domain/project";
 
 const TICKS_PER_MEASURE = 16;
 const STRINGS: StringNumber[] = [1, 2, 3, 4];
@@ -29,19 +29,32 @@ function sameCell(a: Cell | null, b: Cell): boolean {
   return a !== null && a.string === b.string && a.tick === b.tick;
 }
 
-/** Whether `range` is a Note that starts exactly at `cell` - the one shared
- * definition of "this cell displays this Note's fret / is its selection
- * target", used both for rendering a cell's fret and for driving the
- * duration toolbar. */
-function noteStartingAt(range: TickRange | undefined, cell: Cell) {
-  return range?.slot.kind === "note" && range.slot.string === cell.string && range.start === cell.tick
-    ? range.slot
-    : null;
+type CellNoteRelation =
+  | { kind: "start"; note: Note } // this cell is where the Note begins - shows its fret, is its selection target
+  | { kind: "continuation" } // a later tick of that same Note, on its own string - disabled (see MeasureGrid's docs)
+  | { kind: "none" }; // a Rest, or a Note on a different string - an ordinary clickable cell
+
+/** How `cell` relates to whatever Note occupies its string at that tick, if
+ * any - the one shared classification behind both "does this cell show a
+ * fret / is it the duration toolbar's target" and "is this cell disabled as
+ * a Note's own continuation," so the two can't drift apart on what counts as
+ * a Note's start. */
+function cellNoteRelation(range: TickRange | undefined, cell: Cell): CellNoteRelation {
+  if (range?.slot.kind !== "note" || range.slot.string !== cell.string) return { kind: "none" };
+  return range.start === cell.tick ? { kind: "start", note: range.slot } : { kind: "continuation" };
 }
 
 /**
  * One Measure as a 4-string x 16-tick clickable grid (ADR-0004: overwrite
- * model). Clicking any cell - Rest or Note - selects it and opens an empty
+ * model). The default Note duration is one tick (sixteenth), so a click
+ * always means "a new, independent Note here" - never "guess which existing
+ * Note this belongs to." A Note widened past one tick (via the duration
+ * toolbar below) disables the cells for its later ticks on its own string
+ * (grayed out, unclickable) so they're never mistaken for empty ones; a
+ * different string at those same ticks is still a legitimate target for its
+ * own Note (ADR-0004 overwrite).
+ *
+ * Clicking any enabled cell - Rest or Note - selects it and opens an empty
  * inline fret entry there. From there:
  * - Digits + Enter (or clicking elsewhere) overwrite whatever was at that
  *   position with a Note, through `placeNoteAt`. An empty confirm (nothing
@@ -74,8 +87,8 @@ export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuratio
   // existing Note is deleted via Backspace/Delete instead - ticket 05).
   const selectedNote = (() => {
     if (!editingCell) return null;
-    const note = noteStartingAt(rangeAtTick(editingCell.tick), editingCell);
-    return note ? { cell: editingCell, duration: note.duration } : null;
+    const relation = cellNoteRelation(rangeAtTick(editingCell.tick), editingCell);
+    return relation.kind === "start" ? { cell: editingCell, duration: relation.note.duration } : null;
   })();
 
   // Shared close-the-entry plumbing for confirmEntry and confirmRest below:
@@ -117,20 +130,14 @@ export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuratio
     confirm((cell) => onDeleteNote(cell.tick));
   }
 
+  // A later tick of the clicked cell's own Note is disabled in the render
+  // loop below and never reaches this handler, so `cell` is always either a
+  // Note's own start (editing it) or free for a new Note - on this string or
+  // a different one at that tick (ADR-0004 overwrite) - never a sub-tick
+  // that needs redirecting to some other position.
   function handleCellClick(cell: Cell) {
-    const range = rangeAtTick(cell.tick);
-    // Clicking anywhere in an existing Note's own span (not just its first
-    // tick, e.g. the second tick of a default eighth-note) must edit that
-    // Note at its actual start - not fragment it at the clicked sub-tick.
-    // A click on a different string at that same tick is a new Note there
-    // instead (ADR-0004 overwrite), so it keeps the exact tick clicked.
-    const target: Cell =
-      range?.slot.kind === "note" && range.slot.string === cell.string
-        ? { string: cell.string, tick: range.start }
-        : cell;
-
     confirmedRef.current = false;
-    setEditingCell(target);
+    setEditingCell(cell);
     setInputValue("");
   }
 
@@ -166,14 +173,16 @@ export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuratio
         {STRINGS.map((string) =>
           Array.from({ length: TICKS_PER_MEASURE }, (_, tick) => {
             const cell: Cell = { string, tick };
+            const relation = cellNoteRelation(rangeAtTick(tick), cell);
             const isEditing = sameCell(editingCell, cell);
-            const fret = noteStartingAt(rangeAtTick(tick), cell)?.fret ?? null;
+            const isDisabled = relation.kind === "continuation";
+            const fret = relation.kind === "start" ? relation.note.fret : null;
 
             return (
               <div
                 key={`${string}-${tick}`}
-                className={`measure-grid-cell${isEditing ? " selected" : ""}`}
-                onClick={() => handleCellClick(cell)}
+                className={`measure-grid-cell${isEditing ? " selected" : ""}${isDisabled ? " disabled" : ""}`}
+                onClick={isDisabled ? undefined : () => handleCellClick(cell)}
               >
                 {isEditing ? (
                   <input

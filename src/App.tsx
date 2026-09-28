@@ -5,7 +5,8 @@ import {
   addMeasure,
   changeDuration,
   createEmptyMeasure,
-  DEFAULT_DURATION,
+  DEFAULT_NOTE_DURATION,
+  DEFAULT_REST_DURATION,
   deleteNoteAt,
   placeNoteAt,
   placeRestAt,
@@ -56,7 +57,7 @@ function App() {
         kind: "note",
         string,
         fret,
-        duration: DEFAULT_DURATION,
+        duration: DEFAULT_NOTE_DURATION,
       });
       return { ...prev, measures };
     });
@@ -65,7 +66,7 @@ function App() {
   function handlePlaceRest(measureIndex: number, tick: number) {
     setProject((prev) => {
       const measures = [...prev.measures];
-      measures[measureIndex] = placeRestAt(measures[measureIndex], tick, DEFAULT_DURATION);
+      measures[measureIndex] = placeRestAt(measures[measureIndex], tick, DEFAULT_REST_DURATION);
       return { ...prev, measures };
     });
   }
