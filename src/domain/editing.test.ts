@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { placeNoteAt } from "./editing";
-import type { Measure } from "./project";
+import { addMeasure, changeDuration, placeNoteAt, placeRestAt } from "./editing";
+import type { Measure, Project } from "./project";
+import { STANDARD_BASS_TUNING } from "./project";
 
 describe("placeNoteAt", () => {
   it("places a Note at tick 0 and backfills the rest of a whole-rest measure", () => {
@@ -79,5 +80,114 @@ describe("placeNoteAt", () => {
       { kind: "note", string: 2, fret: 7, duration: "quarter" },
       { kind: "rest", duration: "sixteenth" },
     ]);
+  });
+});
+
+describe("changeDuration", () => {
+  it("shrinks a Note's duration, backfilling the freed ticks with Rests", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [
+        { kind: "note", string: 1, fret: 3, duration: "quarter" }, // ticks 0-4
+        { kind: "rest", duration: "quarter" }, // ticks 4-8
+      ],
+    };
+
+    const result = changeDuration(measure, 0, "eighth");
+
+    // Fret and string untouched; only the duration shrinks (4 -> 2 ticks),
+    // freeing 2 ticks that get backfilled as an eighth rest, ahead of the
+    // untouched quarter rest that was already there.
+    expect(result.slots).toEqual([
+      { kind: "note", string: 1, fret: 3, duration: "eighth" },
+      { kind: "rest", duration: "eighth" },
+      { kind: "rest", duration: "quarter" },
+    ]);
+  });
+
+  it("grows a Note's duration, overwriting whatever it now overlaps", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [
+        { kind: "note", string: 2, fret: 1, duration: "eighth" }, // ticks 0-2
+        { kind: "rest", duration: "whole" }, // ticks 2-18 (past the measure - fine, unvalidated per ADR-0004)
+      ],
+    };
+
+    const result = changeDuration(measure, 0, "quarter");
+
+    // Growing to 4 ticks eats into the rest that followed; the leftover
+    // 14 ticks of that rest are backfilled the same way placeNoteAt always
+    // does (half + quarter + eighth).
+    expect(result.slots).toEqual([
+      { kind: "note", string: 2, fret: 1, duration: "quarter" },
+      { kind: "rest", duration: "half" },
+      { kind: "rest", duration: "quarter" },
+      { kind: "rest", duration: "eighth" },
+    ]);
+  });
+
+  it("does nothing when tick isn't the start of a Note", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [{ kind: "rest", duration: "whole" }],
+    };
+
+    expect(changeDuration(measure, 0, "quarter")).toEqual(measure);
+    expect(changeDuration(measure, 4, "quarter")).toEqual(measure);
+  });
+});
+
+describe("placeRestAt", () => {
+  it("places a Rest at tick 0, backfilling the remainder the same way placeNoteAt does", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [{ kind: "rest", duration: "whole" }],
+    };
+
+    const result = placeRestAt(measure, 0, "quarter");
+
+    expect(result.slots).toEqual([
+      { kind: "rest", duration: "quarter" },
+      { kind: "rest", duration: "half" },
+      { kind: "rest", duration: "quarter" },
+    ]);
+  });
+
+  it("overwrites a Note it overlaps, same as placing a Note would", () => {
+    const measure: Measure = {
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [{ kind: "note", string: 4, fret: 2, duration: "quarter" }], // ticks 0-4
+    };
+
+    const result = placeRestAt(measure, 0, "eighth");
+
+    expect(result.slots).toEqual([{ kind: "rest", duration: "eighth" }, { kind: "rest", duration: "eighth" }]);
+  });
+});
+
+describe("addMeasure", () => {
+  it("appends a fresh empty 4/4 Measure, leaving the rest of the Project untouched", () => {
+    const project: Project = {
+      title: "Song",
+      tuning: STANDARD_BASS_TUNING,
+      measures: [
+        {
+          timeSignature: { numerator: 4, denominator: 4 },
+          slots: [{ kind: "note", string: 1, fret: 3, duration: "quarter" }],
+        },
+      ],
+    };
+
+    const result = addMeasure(project);
+
+    expect(result.title).toBe("Song");
+    expect(result.tuning).toBe(STANDARD_BASS_TUNING);
+    expect(result.measures).toHaveLength(2);
+    expect(result.measures[0]).toEqual(project.measures[0]);
+    expect(result.measures[1]).toEqual({
+      timeSignature: { numerator: 4, denominator: 4 },
+      slots: [{ kind: "rest", duration: "whole" }],
+    });
   });
 });

@@ -1,8 +1,8 @@
 import { AlphaTabApi } from "@coderline/alphatab";
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import { createEmptyMeasure, DEFAULT_DURATION, placeNoteAt } from "./domain/editing";
-import type { Project, StringNumber } from "./domain/project";
+import { addMeasure, changeDuration, createEmptyMeasure, DEFAULT_DURATION, placeNoteAt, placeRestAt } from "./domain/editing";
+import type { Duration, Project, StringNumber } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
 import { projectToScore } from "./rendering/projectToScore";
@@ -54,6 +54,26 @@ function App() {
     });
   }
 
+  function handlePlaceRest(measureIndex: number, tick: number) {
+    setProject((prev) => {
+      const measures = [...prev.measures];
+      measures[measureIndex] = placeRestAt(measures[measureIndex], tick, DEFAULT_DURATION);
+      return { ...prev, measures };
+    });
+  }
+
+  function handleChangeDuration(measureIndex: number, tick: number, duration: Duration) {
+    setProject((prev) => {
+      const measures = [...prev.measures];
+      measures[measureIndex] = changeDuration(measures[measureIndex], tick, duration);
+      return { ...prev, measures };
+    });
+  }
+
+  function handleAddMeasure() {
+    setProject((prev) => addMeasure(prev));
+  }
+
   return (
     <>
       <h1>Bass Tab Editor</h1>
@@ -62,8 +82,13 @@ function App() {
           key={index}
           measure={measure}
           onPlaceNote={(tick, string, fret) => handlePlaceNote(index, tick, string, fret)}
+          onPlaceRest={(tick) => handlePlaceRest(index, tick)}
+          onChangeDuration={(tick, duration) => handleChangeDuration(index, tick, duration)}
         />
       ))}
+      <button type="button" onClick={handleAddMeasure}>
+        + Add measure
+      </button>
       <div ref={elementRef} />
     </>
   );

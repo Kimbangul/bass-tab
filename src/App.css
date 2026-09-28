@@ -41,6 +41,24 @@
   outline-color: #0078ff;
 }
 
+.duration-toolbar {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.duration-toolbar button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.duration-toolbar button.active {
+  background: #0078ff;
+  color: white;
+  border-color: #0078ff;
+}
+
 .measure-grid-cell input {
   width: 100%;
   height: 100%;
