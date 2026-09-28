@@ -22,6 +22,19 @@ Client-only TS web app (Vite + React). Rendering engine and no-backend call are 
 - Persistence: both an IndexedDB auto-save and an explicit JSON Save/Load, same Project shape for both
 - `npm test` runs the vitest suite; `src/domain/` (Project model) and `src/rendering/` (Project→AlphaTab Score adapter) are built test-first — see their `*.test.ts` files for the seam's behavior before changing either
 
+## Commit messages
+
+[Conventional Commits](https://www.conventionalcommits.org/): `<type>: <imperative summary>`, e.g. `feat: add duration toolbar for selected notes`. A body is welcome for anything non-obvious (what a code-review pass caught and fixed, why an approach was rejected) but the subject line always carries the type.
+
+- **feat** — new user-facing behavior (a ticket's acceptance criteria going green)
+- **fix** — correcting behavior that was wrong, including a code-review finding fixed before the feat commit ever lands
+- **refactor** — internal restructuring with no behavior change
+- **test** — test-only changes (new coverage, no production code touched)
+- **docs** — `CONTEXT.md`, ADRs, specs/tickets, this file
+- **chore** — tooling, dependencies, config; nothing under `src/`
+
+One commit, one type — if a change is both a fix and a refactor, pick whichever the reader most needs to know before touching that code.
+
 ## Agent skills
 
 ### Issue tracker
