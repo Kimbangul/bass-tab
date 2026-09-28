@@ -35,6 +35,10 @@ Client-only TS web app (Vite + React). Rendering engine and no-backend call are 
 
 One commit, one type — if a change is both a fix and a refactor, pick whichever the reader most needs to know before touching that code.
 
+## Implementation gating
+
+Don't write implementation code during a design/discussion turn — a `/grilling` session, a bug report, a spec question — even once the cause and the fix are agreed on. This applies to bug fixes as much as new features. Land on a decision, update the relevant doc (spec, ticket, ADR, or this file), and stop there; implementation is its own, separately-requested step, triggered only by the user explicitly asking for it (e.g. "구현해줘", "implement this", invoking `/implement`).
+
 ## Agent skills
 
 ### Issue tracker
