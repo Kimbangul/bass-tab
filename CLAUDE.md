@@ -12,13 +12,14 @@ Read `CONTEXT.md` before naming a Project, Measure, Note, Save, Auto-save, or Ex
 - **Rendering engine** — before picking or swapping the notation-rendering library: [0002](docs/adr/0002-alphatab-rendering-engine.md)
 - **v1 scope** — before adding multi-track, file import, playback, technique symbols, a time-signature UI, or Undo/Redo: [0003](docs/adr/0003-v1-scope-boundaries.md)
 - **Note editing model** — before touching how placing/deleting a note works: [0004](docs/adr/0004-overwrite-note-editing.md)
+- **PDF export mechanism** — before building any canvas/page-break/jsPDF pipeline for PDF: [0005](docs/adr/0005-print-based-pdf-export.md)
 
 ## Tech stack
 
 Client-only TS web app (Vite + React). Rendering engine and no-backend call are in ADR-0001/0002 above; not restated here.
 
-- PDF export: render AlphaTab's page layout to canvas per page, assemble with `jsPDF`, A4 portrait
-- JPG export: `canvas.toBlob('image/jpeg')` per page
+- PDF export: `api.print()`'s browser print dialog, not a canvas/jsPDF pipeline (ADR-0005)
+- JPG export: multiple files, one per page - page breaks found via AlphaTab's `boundsLookup` (system-boundary-aware, never mid-system), each page captured to canvas and exported with `canvas.toBlob('image/jpeg')`
 - Persistence: both an IndexedDB auto-save and an explicit JSON Save/Load, same Project shape for both
 - `npm test` runs the vitest suite; `src/domain/` (Project model) and `src/rendering/` (Project→AlphaTab Score adapter) are built test-first — see their `*.test.ts` files for the seam's behavior before changing either
 
