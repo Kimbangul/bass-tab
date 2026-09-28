@@ -33,6 +33,12 @@
   justify-content: center;
   cursor: pointer;
   font-size: 0.75rem;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+.measure-grid-cell.selected {
+  outline-color: #0078ff;
 }
 
 .measure-grid-cell input {

@@ -5,20 +5,32 @@ import type { Measure, StringNumber } from "../domain/project";
 const TICKS_PER_MEASURE = 16;
 const STRINGS: StringNumber[] = [1, 2, 3, 4];
 
+interface Cell {
+  string: StringNumber;
+  tick: number;
+}
+
 interface Props {
   measure: Measure;
   onPlaceNote: (tick: number, string: StringNumber, fret: number) => void;
 }
 
+function sameCell(a: Cell | null, b: Cell): boolean {
+  return a !== null && a.string === b.string && a.tick === b.tick;
+}
+
 /**
  * One Measure as a 4-string x 16-tick clickable grid (ADR-0004: overwrite
- * model). Clicking a cell that's currently a Rest opens an inline fret
- * entry; clicking a cell that already holds a Note is a no-op here -
- * selecting/overwriting an existing Note is ticket 02, not this one.
+ * model). Clicking any cell - Rest or Note - selects it and opens an empty
+ * inline fret entry there; typing digits and pressing Enter (or clicking
+ * elsewhere) confirms and overwrites whatever was at that position through
+ * `placeNoteAt`. An empty confirm (nothing typed) leaves the cell as it
+ * was. Selecting a different cell moves the selection - only one cell is
+ * ever being edited at a time.
  */
 export function MeasureGrid({ measure, onPlaceNote }: Props) {
   const ranges = tickRangesOf(measure);
-  const [editingCell, setEditingCell] = useState<{ string: StringNumber; tick: number } | null>(null);
+  const [editingCell, setEditingCell] = useState<Cell | null>(null);
   const [inputValue, setInputValue] = useState("");
   // Enter and the blur it can trigger (when React removes the still-focused
   // input on the resulting re-render) can both reach confirmEntry for the
@@ -43,11 +55,20 @@ export function MeasureGrid({ measure, onPlaceNote }: Props) {
     setInputValue("");
   }
 
-  function handleCellClick(string: StringNumber, tick: number) {
-    const slot = rangeAtTick(tick)?.slot;
-    if (slot?.kind === "note" && slot.string === string) return; // ticket 02
+  function handleCellClick(cell: Cell) {
+    const range = rangeAtTick(cell.tick);
+    // Clicking anywhere in an existing Note's own span (not just its first
+    // tick, e.g. the second tick of a default eighth-note) must edit that
+    // Note at its actual start - not fragment it at the clicked sub-tick.
+    // A click on a different string at that same tick is a new Note there
+    // instead (ADR-0004 overwrite), so it keeps the exact tick clicked.
+    const target: Cell =
+      range?.slot.kind === "note" && range.slot.string === cell.string
+        ? { string: cell.string, tick: range.start }
+        : cell;
+
     confirmedRef.current = false;
-    setEditingCell({ string, tick });
+    setEditingCell(target);
     setInputValue("");
   }
 
@@ -55,15 +76,20 @@ export function MeasureGrid({ measure, onPlaceNote }: Props) {
     <div className="measure-grid" style={{ gridTemplateColumns: `repeat(${TICKS_PER_MEASURE}, 2rem)` }}>
       {STRINGS.map((string) =>
         Array.from({ length: TICKS_PER_MEASURE }, (_, tick) => {
+          const cell: Cell = { string, tick };
           const range = rangeAtTick(tick);
-          const isEditing = editingCell?.string === string && editingCell.tick === tick;
+          const isEditing = sameCell(editingCell, cell);
           const fret =
             range?.slot.kind === "note" && range.slot.string === string && range.start === tick
               ? range.slot.fret
               : null;
 
           return (
-            <div key={`${string}-${tick}`} className="measure-grid-cell" onClick={() => handleCellClick(string, tick)}>
+            <div
+              key={`${string}-${tick}`}
+              className={`measure-grid-cell${isEditing ? " selected" : ""}`}
+              onClick={() => handleCellClick(cell)}
+            >
               {isEditing ? (
                 <input
                   autoFocus
