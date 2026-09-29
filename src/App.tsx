@@ -91,9 +91,26 @@ function App() {
     setProject((prev) => addMeasure(prev));
   }
 
+  function handleChangeTitle(title: string) {
+    setProject((prev) => ({ ...prev, title }));
+  }
+
+  function handleExportPdf() {
+    // AlphaTab's own print flow (ADR-0005) - opens a print-optimized popup;
+    // the user finishes the export via their browser's print dialog (e.g.
+    // "Save as PDF"). No canvas capture or page-break logic of our own.
+    apiRef.current?.print();
+  }
+
   return (
     <>
       <h1>Bass Tab Editor</h1>
+      <input
+        className="project-title"
+        value={project.title}
+        onChange={(e) => handleChangeTitle(e.target.value)}
+        aria-label="Project title"
+      />
       {project.measures.map((measure, index) => (
         <MeasureGrid
           key={index}
@@ -106,6 +123,9 @@ function App() {
       ))}
       <button type="button" onClick={handleAddMeasure}>
         + Add measure
+      </button>
+      <button type="button" onClick={handleExportPdf}>
+        Export PDF
       </button>
       <div ref={elementRef} />
     </>
