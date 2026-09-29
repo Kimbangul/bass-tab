@@ -14,7 +14,19 @@ import {
 import type { Duration, Project, StringNumber } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
+import { loadProjectFromIndexedDB, saveProjectToIndexedDB } from "./persistence/autosave";
+import { parseSavedProject } from "./persistence/parseSavedProject";
 import { projectToScore } from "./rendering/projectToScore";
+
+const AUTOSAVE_DEBOUNCE_MS = 500;
+
+// Windows/macOS/Linux all reject a subset of these in filenames; replacing
+// them (rather than leaving it to the browser/OS to silently mangle or
+// reject the download) keeps Save's filename predictable.
+function sanitizeFilename(name: string): string {
+  const cleaned = name.replace(/[/\\:*?"<>|]/g, "_").trim();
+  return cleaned || "Untitled";
+}
 
 function createEmptyProject(): Project {
   return {
@@ -27,7 +39,32 @@ function createEmptyProject(): Project {
 function App() {
   const elementRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<AlphaTabApi | null>(null);
+  const loadInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project>(createEmptyProject);
+  // Gates auto-save until the restore attempt below finishes - otherwise the
+  // initial empty Project could get auto-saved first and overwrite a real
+  // one before it's ever read back.
+  const [hasRestored, setHasRestored] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadProjectFromIndexedDB().then((restored) => {
+      if (cancelled) return;
+      if (restored) setProject(restored);
+      setHasRestored(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestored) return;
+    const timeout = setTimeout(() => {
+      saveProjectToIndexedDB(project);
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [project, hasRestored]);
 
   useEffect(() => {
     const api = new AlphaTabApi(elementRef.current!, {
@@ -102,6 +139,33 @@ function App() {
     apiRef.current?.print();
   }
 
+  function handleSave() {
+    const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${sanitizeFilename(project.title)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleLoadFile(file: File) {
+    if (!window.confirm("현재 작업 중인 내용이 사라집니다. 불러올까요?")) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        setProject(parseSavedProject(String(reader.result)));
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "파일을 불러오지 못했습니다.");
+      }
+    };
+    reader.onerror = () => {
+      window.alert("파일을 읽지 못했습니다.");
+    };
+    reader.readAsText(file);
+  }
+
   return (
     <>
       <h1>Bass Tab Editor</h1>
@@ -127,6 +191,23 @@ function App() {
       <button type="button" onClick={handleExportPdf}>
         Export PDF
       </button>
+      <button type="button" onClick={handleSave}>
+        Save
+      </button>
+      <button type="button" onClick={() => loadInputRef.current?.click()}>
+        Load
+      </button>
+      <input
+        ref={loadInputRef}
+        type="file"
+        accept="application/json"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleLoadFile(file);
+          e.target.value = "";
+        }}
+      />
       <div ref={elementRef} />
     </>
   );
