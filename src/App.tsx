@@ -14,6 +14,7 @@ import {
 import type { Duration, Project, StringNumber } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
+import { exportJpg } from "./export/exportJpg";
 import { loadProjectFromIndexedDB, saveProjectToIndexedDB } from "./persistence/autosave";
 import { parseSavedProject } from "./persistence/parseSavedProject";
 import { projectToScore } from "./rendering/projectToScore";
@@ -139,6 +140,15 @@ function App() {
     apiRef.current?.print();
   }
 
+  function handleExportJpg() {
+    const api = apiRef.current;
+    const container = elementRef.current;
+    if (!api || !container) return;
+    exportJpg(api, container, sanitizeFilename(project.title)).catch(() => {
+      window.alert("JPG로 내보내지 못했습니다.");
+    });
+  }
+
   function handleSave() {
     const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -190,6 +200,9 @@ function App() {
       </button>
       <button type="button" onClick={handleExportPdf}>
         Export PDF
+      </button>
+      <button type="button" onClick={handleExportJpg}>
+        Export JPG
       </button>
       <button type="button" onClick={handleSave}>
         Save
