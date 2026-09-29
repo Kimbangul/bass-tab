@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMeasure, changeDuration, deleteNoteAt, placeNoteAt, placeRestAt } from "./editing";
+import { addMeasure, changeDuration, deleteNoteAt, placeNoteAt, placeRestAt, ticksPerMeasure } from "./editing";
 import type { Measure, Project } from "./project";
 import { STANDARD_BASS_TUNING } from "./project";
 
@@ -198,6 +198,33 @@ describe("addMeasure", () => {
       timeSignature: { numerator: 4, denominator: 4 },
       slots: [{ kind: "rest", duration: "whole" }],
     });
+  });
+
+  it("appends a Measure in the given TimeSignature when one is passed", () => {
+    const project: Project = {
+      title: "Song",
+      tuning: STANDARD_BASS_TUNING,
+      measures: [],
+    };
+
+    const result = addMeasure(project, { numerator: 3, denominator: 4 });
+
+    expect(result.measures).toHaveLength(1);
+    expect(result.measures[0]).toEqual({
+      timeSignature: { numerator: 3, denominator: 4 },
+      slots: [{ kind: "rest", duration: "whole" }],
+    });
+  });
+});
+
+describe("ticksPerMeasure", () => {
+  it.each([
+    [{ numerator: 4, denominator: 4 }, 16],
+    [{ numerator: 3, denominator: 4 }, 12],
+    [{ numerator: 6, denominator: 8 }, 12],
+    [{ numerator: 2, denominator: 4 }, 8],
+  ])("returns %o -> %i ticks", (timeSignature, expected) => {
+    expect(ticksPerMeasure(timeSignature)).toBe(expected);
   });
 });
 

@@ -1,8 +1,7 @@
 import { useRef, useState } from "react";
-import { DURATIONS_LARGEST_FIRST, tickRangesOf, type TickRange } from "../domain/editing";
+import { DURATIONS_LARGEST_FIRST, ticksPerMeasure, tickRangesOf, type TickRange } from "../domain/editing";
 import type { Duration, Measure, Note, StringNumber } from "../domain/project";
 
-const TICKS_PER_MEASURE = 16;
 const STRINGS: StringNumber[] = [1, 2, 3, 4];
 const DURATION_LABELS: Record<Duration, string> = {
   whole: "1/1",
@@ -45,8 +44,9 @@ function cellNoteRelation(range: TickRange | undefined, cell: Cell): CellNoteRel
 }
 
 /**
- * One Measure as a 4-string x 16-tick clickable grid (ADR-0004: overwrite
- * model). The default Note duration is one tick (sixteenth), so a click
+ * One Measure as a 4-string x N-tick clickable grid, N from the Measure's
+ * own timeSignature via ticksPerMeasure (ADR-0004: overwrite model). The
+ * default Note duration is one tick (sixteenth), so a click
  * always means "a new, independent Note here" - never "guess which existing
  * Note this belongs to." A Note widened past one tick (via the duration
  * toolbar below) disables the cells for its later ticks on its own string
@@ -70,6 +70,7 @@ function cellNoteRelation(range: TickRange | undefined, cell: Cell): CellNoteRel
  */
 export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuration, onDeleteNote }: Props) {
   const ranges = tickRangesOf(measure);
+  const ticksPerRow = ticksPerMeasure(measure.timeSignature);
   const [editingCell, setEditingCell] = useState<Cell | null>(null);
   const [inputValue, setInputValue] = useState("");
   // Enter and the blur it can trigger (when React removes the still-focused
@@ -169,9 +170,9 @@ export function MeasureGrid({ measure, onPlaceNote, onPlaceRest, onChangeDuratio
           ))}
         </div>
       )}
-      <div className="measure-grid" style={{ gridTemplateColumns: `repeat(${TICKS_PER_MEASURE}, 2rem)` }}>
+      <div className="measure-grid" style={{ gridTemplateColumns: `repeat(${ticksPerRow}, 2rem)` }}>
         {STRINGS.map((string) =>
-          Array.from({ length: TICKS_PER_MEASURE }, (_, tick) => {
+          Array.from({ length: ticksPerRow }, (_, tick) => {
             const cell: Cell = { string, tick };
             const relation = cellNoteRelation(rangeAtTick(tick), cell);
             const isEditing = sameCell(editingCell, cell);

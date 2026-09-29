@@ -38,6 +38,14 @@ const DURATION_TICKS: Record<Duration, number> = {
  * to list them all. */
 export const DURATIONS_LARGEST_FIRST: readonly Duration[] = ["whole", "half", "quarter", "eighth", "sixteenth"];
 
+/** How many sixteenth-note ticks a Measure in `timeSignature` spans - the
+ * grid width MeasureGrid renders and addMeasure sizes a fresh Measure's
+ * whole-Rest to. Always a whole number: denominators are restricted
+ * (ticket 02's UI) to values that evenly divide 16. */
+export function ticksPerMeasure(timeSignature: TimeSignature): number {
+  return timeSignature.numerator * (16 / timeSignature.denominator);
+}
+
 export interface TickRange {
   slot: MeasureSlot;
   start: number;
@@ -147,10 +155,10 @@ export function deleteNoteAt(measure: Measure, tick: number): Measure {
 }
 
 /**
- * Appends a fresh empty 4/4 Measure to the Project. Measures are never
- * created automatically elsewhere - this is the only way one gets added
- * (ADR-0003: no per-measure time-signature UI in this version).
+ * Appends a fresh empty Measure to the Project, in `timeSignature` (default
+ * 4/4, matching createEmptyMeasure). Measures are never created
+ * automatically elsewhere - this is the only way one gets added.
  */
-export function addMeasure(project: Project): Project {
-  return { ...project, measures: [...project.measures, createEmptyMeasure()] };
+export function addMeasure(project: Project, timeSignature?: TimeSignature): Project {
+  return { ...project, measures: [...project.measures, createEmptyMeasure(timeSignature)] };
 }
