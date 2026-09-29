@@ -11,6 +11,7 @@ import {
   placeNoteAt,
   placeRestAt,
 } from "./domain/editing";
+import { createHistory, push, redo, undo, type History } from "./domain/history";
 import type { Duration, Project, StringNumber, TimeSignature } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
@@ -48,11 +49,18 @@ function App() {
   const elementRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<AlphaTabApi | null>(null);
   const loadInputRef = useRef<HTMLInputElement>(null);
+  // Title editing has no Enter/blur "confirm" step like a grid cell does - it
+  // commits every keystroke live. Without this, each keystroke would push its
+  // own history entry, making undo nearly useless for typing a title. Pushed
+  // once per continuous typing session (reset on blur), so undo treats "type
+  // a whole title" as one step, matching the fret-entry input's granularity.
+  const titleHistoryPushedRef = useRef(false);
   const [project, setProject] = useState<Project>(createEmptyProject);
   // The time signature the next "+ Add measure" click will use - starts at
   // 4/4 and remembers the last pick, so adding several measures of the same
   // non-default signature in a row doesn't mean reselecting it every time.
   const [nextTimeSignature, setNextTimeSignature] = useState<TimeSignature>(DEFAULT_TIME_SIGNATURE);
+  const [history, setHistory] = useState<History<Project>>(createHistory);
   // Gates auto-save until the restore attempt below finishes - otherwise the
   // initial empty Project could get auto-saved first and overwrite a real
   // one before it's ever read back.
@@ -99,7 +107,49 @@ function App() {
     apiRef.current?.renderScore(projectToScore(project));
   }, [project]);
 
+  // Ctrl+Z / Ctrl+Shift+Z undo/redo, ignored while any text input has focus
+  // (the MeasureGrid fret-entry input's own Backspace/Delete handling, and a
+  // text input's native browser undo, both take priority over the app-wide
+  // shortcut instead of fighting it).
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!e.ctrlKey || e.key.toLowerCase() !== "z") return;
+      if (document.activeElement?.tagName === "INPUT") return;
+      e.preventDefault();
+      // Same two-step "apply the step" body as handleUndo/handleRedo below,
+      // inlined rather than calling them - referencing those (recreated every
+      // render) here would need useCallback to satisfy exhaustive-deps, which
+      // is more machinery than this tiny duplication is worth.
+      const step = e.shiftKey ? redo(history, project) : undo(history, project);
+      setHistory(step.history);
+      setProject(step.value);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [history, project]);
+
+  // Every action below that mutates `project` pushes the pre-change value
+  // onto the undo history first - `project` here is this render's value,
+  // captured before `setProject` schedules the actual change, so it's always
+  // the correct "what to go back to" snapshot.
+  function pushHistory() {
+    setHistory((h) => push(h, project));
+  }
+
+  function handleUndo() {
+    const step = undo(history, project);
+    setHistory(step.history);
+    setProject(step.value);
+  }
+
+  function handleRedo() {
+    const step = redo(history, project);
+    setHistory(step.history);
+    setProject(step.value);
+  }
+
   function handlePlaceNote(measureIndex: number, tick: number, string: StringNumber, fret: number) {
+    pushHistory();
     setProject((prev) => {
       const measures = [...prev.measures];
       measures[measureIndex] = placeNoteAt(measures[measureIndex], tick, {
@@ -113,6 +163,7 @@ function App() {
   }
 
   function handlePlaceRest(measureIndex: number, tick: number) {
+    pushHistory();
     setProject((prev) => {
       const measures = [...prev.measures];
       measures[measureIndex] = placeRestAt(measures[measureIndex], tick, DEFAULT_REST_DURATION);
@@ -121,6 +172,7 @@ function App() {
   }
 
   function handleChangeDuration(measureIndex: number, tick: number, duration: Duration) {
+    pushHistory();
     setProject((prev) => {
       const measures = [...prev.measures];
       measures[measureIndex] = changeDuration(measures[measureIndex], tick, duration);
@@ -129,6 +181,7 @@ function App() {
   }
 
   function handleDeleteNote(measureIndex: number, tick: number) {
+    pushHistory();
     setProject((prev) => {
       const measures = [...prev.measures];
       measures[measureIndex] = deleteNoteAt(measures[measureIndex], tick);
@@ -137,10 +190,15 @@ function App() {
   }
 
   function handleAddMeasure() {
+    pushHistory();
     setProject((prev) => addMeasure(prev, nextTimeSignature));
   }
 
   function handleChangeTitle(title: string) {
+    if (!titleHistoryPushedRef.current) {
+      pushHistory();
+      titleHistoryPushedRef.current = true;
+    }
     setProject((prev) => ({ ...prev, title }));
   }
 
@@ -194,8 +252,17 @@ function App() {
         className="project-title"
         value={project.title}
         onChange={(e) => handleChangeTitle(e.target.value)}
+        onBlur={() => {
+          titleHistoryPushedRef.current = false;
+        }}
         aria-label="Project title"
       />
+      <button type="button" onClick={handleUndo} disabled={history.past.length === 0}>
+        Undo
+      </button>
+      <button type="button" onClick={handleRedo} disabled={history.future.length === 0}>
+        Redo
+      </button>
       {project.measures.map((measure, index) => (
         <MeasureGrid
           key={index}
