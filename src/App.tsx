@@ -11,7 +11,7 @@ import {
   placeNoteAt,
   placeRestAt,
 } from "./domain/editing";
-import { createHistory, push, redo, undo, type History } from "./domain/history";
+import { clear, createHistory, push, redo, undo, type History } from "./domain/history";
 import type { Duration, Project, StringNumber, TimeSignature } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
@@ -235,6 +235,9 @@ function App() {
     reader.onload = () => {
       try {
         setProject(parseSavedProject(String(reader.result)));
+        // A Load opens a different document - its own undo history, not this
+        // one's, so the two can never mix (spec: undo-redo/03).
+        setHistory(clear());
       } catch (error) {
         window.alert(error instanceof Error ? error.message : "파일을 불러오지 못했습니다.");
       }
