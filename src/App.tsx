@@ -11,7 +11,7 @@ import {
   placeNoteAt,
   placeRestAt,
 } from "./domain/editing";
-import type { Duration, Project, StringNumber } from "./domain/project";
+import type { Duration, Project, StringNumber, TimeSignature } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
 import { exportJpg } from "./export/exportJpg";
@@ -20,6 +20,13 @@ import { parseSavedProject } from "./persistence/parseSavedProject";
 import { projectToScore } from "./rendering/projectToScore";
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
+
+// Denominators that evenly divide the grid's sixteenth-note tick resolution
+// (ticksPerMeasure in domain/editing.ts) - any other denominator would need a
+// finer tick unit than the app supports.
+const TIME_SIGNATURE_DENOMINATORS = [2, 4, 8, 16] as const;
+const MAX_TIME_SIGNATURE_NUMERATOR = 32;
+const DEFAULT_TIME_SIGNATURE: TimeSignature = { numerator: 4, denominator: 4 };
 
 // Windows/macOS/Linux all reject a subset of these in filenames; replacing
 // them (rather than leaving it to the browser/OS to silently mangle or
@@ -42,6 +49,10 @@ function App() {
   const apiRef = useRef<AlphaTabApi | null>(null);
   const loadInputRef = useRef<HTMLInputElement>(null);
   const [project, setProject] = useState<Project>(createEmptyProject);
+  // The time signature the next "+ Add measure" click will use - starts at
+  // 4/4 and remembers the last pick, so adding several measures of the same
+  // non-default signature in a row doesn't mean reselecting it every time.
+  const [nextTimeSignature, setNextTimeSignature] = useState<TimeSignature>(DEFAULT_TIME_SIGNATURE);
   // Gates auto-save until the restore attempt below finishes - otherwise the
   // initial empty Project could get auto-saved first and overwrite a real
   // one before it's ever read back.
@@ -126,7 +137,7 @@ function App() {
   }
 
   function handleAddMeasure() {
-    setProject((prev) => addMeasure(prev));
+    setProject((prev) => addMeasure(prev, nextTimeSignature));
   }
 
   function handleChangeTitle(title: string) {
@@ -195,6 +206,35 @@ function App() {
           onDeleteNote={(tick) => handleDeleteNote(index, tick)}
         />
       ))}
+      <span className="time-signature-picker">
+        <select
+          aria-label="New measure's time signature numerator"
+          value={nextTimeSignature.numerator}
+          onChange={(e) =>
+            setNextTimeSignature((prev) => ({ ...prev, numerator: Number(e.target.value) }))
+          }
+        >
+          {Array.from({ length: MAX_TIME_SIGNATURE_NUMERATOR }, (_, i) => i + 1).map((numerator) => (
+            <option key={numerator} value={numerator}>
+              {numerator}
+            </option>
+          ))}
+        </select>
+        /
+        <select
+          aria-label="New measure's time signature denominator"
+          value={nextTimeSignature.denominator}
+          onChange={(e) =>
+            setNextTimeSignature((prev) => ({ ...prev, denominator: Number(e.target.value) }))
+          }
+        >
+          {TIME_SIGNATURE_DENOMINATORS.map((denominator) => (
+            <option key={denominator} value={denominator}>
+              {denominator}
+            </option>
+          ))}
+        </select>
+      </span>
       <button type="button" onClick={handleAddMeasure}>
         + Add measure
       </button>
