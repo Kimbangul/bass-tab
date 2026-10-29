@@ -20,7 +20,8 @@ interface Props {
   inserting: boolean;
   /** `pending`: the click was on the pending inserted column itself. */
   onSelect: (column: number, string: StringNumber, pending: boolean) => void;
-  onChangeDuration: (column: number, duration: Duration) => void;
+  /** A duration picked on the toolbar for the selected Note or Rest. */
+  onPickDuration: (duration: Duration) => void;
 }
 
 /** One rendered column: a slot, the append column (no slot), or the pending
@@ -49,28 +50,28 @@ function displayColumns(measure: Measure, pendingAt: number | null): DisplayColu
  * Purely presentational - keystrokes are handled by the surrounding editor
  * (App) through the entry reducer; this only reports clicks.
  */
-export function MeasureGrid({ measure, cursor, digits, inserting, onSelect, onChangeDuration }: Props) {
+export function MeasureGrid({ measure, cursor, digits, inserting, onSelect, onPickDuration }: Props) {
   const columns = displayColumns(measure, inserting && cursor ? cursor.column : null);
   const columnCount = columns.length;
+  // The Note or Rest the toolbar acts on - none on the append column or a pending insert.
   const selectedSlot = cursor && !inserting ? measure.slots[cursor.column] : undefined;
-  const selectedNote = cursor && selectedSlot?.kind === "note" ? { column: cursor.column, slot: selectedSlot } : null;
 
   return (
     <>
-      {selectedNote && (
+      {selectedSlot && (
         <div className="duration-toolbar">
           {DURATIONS_LARGEST_FIRST.map((duration) => (
             <button
               key={duration}
               type="button"
               tabIndex={-1}
-              className={duration === selectedNote.slot.duration ? "active" : ""}
+              className={duration === selectedSlot.duration ? "active" : ""}
               // Keeps keyboard focus on the editor, so clicking the toolbar
               // doesn't read as leaving the entry.
               onMouseDown={(e) => e.preventDefault()}
               onTouchStart={(e) => e.preventDefault()}
               onClick={() => {
-                if (duration !== selectedNote.slot.duration) onChangeDuration(selectedNote.column, duration);
+                if (duration !== selectedSlot.duration) onPickDuration(duration);
               }}
             >
               {DURATION_LABELS[duration]}

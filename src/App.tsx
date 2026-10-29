@@ -1,10 +1,10 @@
 import { AlphaTabApi } from "@coderline/alphatab";
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import { addMeasure, createEmptyMeasure, setDurationAt } from "./domain/editing";
+import { addMeasure, createEmptyMeasure } from "./domain/editing";
 import { applyEntryInput, INITIAL_ENTRY_STATE, type EntryInput, type EntryState } from "./domain/entry";
 import { clear, createHistory, push, redo, undo, type History } from "./domain/history";
-import type { Duration, Project, TimeSignature } from "./domain/project";
+import type { Project, TimeSignature } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
 import { exportJpg } from "./export/exportJpg";
@@ -175,15 +175,6 @@ function App() {
     dispatchEntry(input);
   }
 
-  function handleChangeDuration(measureIndex: number, column: number, duration: Duration) {
-    pushHistory();
-    setProject((prev) => {
-      const measures = [...prev.measures];
-      measures[measureIndex] = setDurationAt(measures[measureIndex], column, duration);
-      return { ...prev, measures };
-    });
-  }
-
   function handleAddMeasure() {
     pushHistory();
     setProject((prev) => addMeasure(prev, nextTimeSignature));
@@ -282,7 +273,7 @@ function App() {
             onSelect={(column, string, pending) =>
               dispatchEntry({ type: "select", cursor: { measure: index, column, string }, pending })
             }
-            onChangeDuration={(column, duration) => handleChangeDuration(index, column, duration)}
+            onPickDuration={(duration) => dispatchEntry({ type: "setDuration", duration })}
           />
         ))}
       </div>

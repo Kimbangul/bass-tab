@@ -53,6 +53,8 @@ export type EntryInput =
   | { type: "enter" }
   | { type: "space"; reverse: boolean }
   | { type: "insert" }
+  /** A duration picked on the toolbar for the selected Note or Rest. */
+  | { type: "setDuration"; duration: Duration }
   | { type: "blur" };
 
 export interface EntryResult {
@@ -134,9 +136,23 @@ function space(state: EntryState, project: Project, reverse: boolean): EntryResu
     return place(state, project, cursor, () => ({ kind: "rest", duration: state.lastDuration }));
   }
 
-  const duration = reverse ? previousDuration(slot.duration) : nextDuration(slot.duration);
+  return changeDuration(state, project, reverse ? previousDuration(slot.duration) : nextDuration(slot.duration));
+}
+
+/** Gives the cursor's column `duration` (within the entry session) and makes
+ * it the last used duration. */
+function changeDuration(state: EntryState, project: Project, duration: Duration): EntryResult {
+  const cursor = state.cursor;
+  if (!cursor || !project.measures[cursor.measure].slots[cursor.column]) return unchanged(state, project);
   const result = edit(state, project, cursor, (measure) => setDurationAt(measure, cursor.column, duration));
   return { ...result, state: { ...result.state, lastDuration: duration } };
+}
+
+/** The toolbar: confirms anything typed, then sets the duration directly. */
+function pickDuration(state: EntryState, project: Project, duration: Duration): EntryResult {
+  const committed = commitDigits(state, project);
+  const changed = changeDuration(committed.state, committed.project, duration);
+  return { ...changed, pushHistory: committed.pushHistory || changed.pushHistory };
 }
 
 /**
@@ -192,6 +208,8 @@ export function applyEntryInput(state: EntryState, project: Project, input: Entr
     }
     case "space":
       return space(state, project, input.reverse);
+    case "setDuration":
+      return pickDuration(state, project, input.duration);
     case "enter": {
       // Enter finishes the column: it moves on once this entry has changed
       // something (a typed fret, a placed or cycled Rest), and otherwise

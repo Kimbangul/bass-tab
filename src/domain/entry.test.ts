@@ -303,3 +303,34 @@ describe("Insert", () => {
     expect(state.cursor?.column).toBe(1);
   });
 });
+
+describe("duration toolbar", () => {
+  const pick = (duration: "whole" | "half" | "quarter" | "eighth" | "sixteenth"): EntryInput => ({
+    type: "setDuration",
+    duration,
+  });
+
+  it("sets the selected Rest's duration directly", () => {
+    const { project } = run(projectOf([{ kind: "rest", duration: "eighth" }]), [select(0, 0), pick("whole")]);
+
+    expect(project.measures[0].slots).toEqual([{ kind: "rest", duration: "whole" }]);
+  });
+
+  it("makes the picked duration the last used one", () => {
+    const { project } = run(projectOf([N(1)]), [select(0, 0), pick("half"), select(0, 1), digit(2), enter]);
+
+    expect(project.measures[0].slots[1]).toMatchObject({ fret: 2, duration: "half" });
+  });
+
+  it("confirms pending digits first, then sets that Note's duration", () => {
+    const { project } = run(projectOf([]), [select(0, 0), digit(4), pick("quarter")]);
+
+    expect(project.measures[0].slots).toEqual([{ kind: "note", string: 4, fret: 4, duration: "quarter" }]);
+  });
+
+  it("joins the entry session's single undo step instead of adding one", () => {
+    const { pushes } = run(projectOf([]), [select(0, 0), space, space, pick("whole"), pick("half")]);
+
+    expect(pushes).toBe(1);
+  });
+});
