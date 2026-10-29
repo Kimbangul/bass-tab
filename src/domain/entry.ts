@@ -4,8 +4,7 @@
 // to inputs and applies the result.
 
 import { insertSlotAt, nextDuration, previousDuration, removeSlotAt, setDurationAt, setSlotAt } from "./editing";
-import type { MeasureSlot } from "./project";
-import type { Duration, Measure, Project, StringNumber } from "./project";
+import type { Duration, Measure, MeasureSlot, Project, StringNumber } from "./project";
 
 /** Where the next keystroke lands. `column === slots.length` is the
  * Measure's append column. */
@@ -61,39 +60,55 @@ export interface EntryResult {
   state: EntryState;
   project: Project;
   /** True when the caller should push the pre-change Project onto undo history. */
-  pushHistory: boolean;
+  needsUndoSnapshot: boolean;
 }
 
-function unchanged(state: EntryState, project: Project): EntryResult {
-  return { state, project, pushHistory: false };
+/** A result that leaves the Project as it was (the entry state may differ). */
+function projectUnchanged(state: EntryState, project: Project): EntryResult {
+  return { state, project, needsUndoSnapshot: false };
+}
+
+/** `result` with `patch` applied to its entry state. */
+function withState(result: EntryResult, patch: Partial<EntryState>): EntryResult {
+  return { ...result, state: { ...result.state, ...patch } };
+}
+
+/** The Note or Rest at `cursor`, or undefined on an append column. */
+function slotAt(project: Project, cursor: Cursor): MeasureSlot | undefined {
+  return project.measures[cursor.measure].slots[cursor.column];
 }
 
 /** Applies `update` to the cursor's Measure as part of the current entry
  * session, asking for an undo snapshot only on the session's first change. */
-function edit(state: EntryState, project: Project, cursor: Cursor, update: (m: Measure) => Measure): EntryResult {
+function editMeasure(state: EntryState, project: Project, cursor: Cursor, update: (m: Measure) => Measure): EntryResult {
   const measures = [...project.measures];
   measures[cursor.measure] = update(measures[cursor.measure]);
   return {
     state: { ...state, changedThisEntry: true },
     project: { ...project, measures },
-    pushHistory: !state.changedThisEntry,
+    needsUndoSnapshot: !state.changedThisEntry,
   };
 }
 
 /** Points the cursor elsewhere (or nowhere), ending the entry session. */
-function moveTo(result: EntryResult, cursor: Cursor | null): EntryResult {
-  return { ...result, state: { ...result.state, cursor, digits: "", changedThisEntry: false, inserting: false } };
+function endEntryAt(result: EntryResult, cursor: Cursor | null): EntryResult {
+  return withState(result, { cursor, digits: "", changedThisEntry: false, inserting: false });
 }
 
 /** Puts `slot` at the cursor: into a pending inserted column when one is
  * open (closing it), otherwise replacing or appending at the cursor. */
-function place(state: EntryState, project: Project, cursor: Cursor, slot: (m: Measure) => MeasureSlot): EntryResult {
-  const result = edit(state, project, cursor, (measure) =>
+function placeAtCursor(
+  state: EntryState,
+  project: Project,
+  cursor: Cursor,
+  slot: (m: Measure) => MeasureSlot,
+): EntryResult {
+  const result = editMeasure(state, project, cursor, (measure) =>
     state.inserting
       ? insertSlotAt(measure, cursor.column, slot(measure))
       : setSlotAt(measure, cursor.column, slot(measure)),
   );
-  return { ...result, state: { ...result.state, inserting: false } };
+  return withState(result, { inserting: false });
 }
 
 function sameColumn(a: Cursor | null, b: Cursor): boolean {
@@ -108,9 +123,9 @@ function sameColumn(a: Cursor | null, b: Cursor): boolean {
  */
 function commitDigits(state: EntryState, project: Project): EntryResult {
   const cursor = state.cursor;
-  if (!cursor || state.digits === "") return unchanged(state, project);
+  if (!cursor || state.digits === "") return projectUnchanged(state, project);
 
-  const result = place(state, project, cursor, (measure) => ({
+  const result = placeAtCursor(state, project, cursor, (measure) => ({
     kind: "note",
     string: cursor.string,
     fret: Number(state.digits),
@@ -118,7 +133,26 @@ function commitDigits(state: EntryState, project: Project): EntryResult {
       ? state.lastDuration
       : (measure.slots[cursor.column]?.duration ?? state.lastDuration),
   }));
-  return { ...result, state: { ...result.state, digits: "" } };
+  return withState(result, { digits: "" });
+}
+
+/**
+ * Moves the cursor to `target`, given in the columns as they are on screen
+ * before this input (a pending inserted column not yet counted). Pending
+ * digits are confirmed first. If that confirmed a pending insert, every
+ * column from the insert point on has moved up by one, so `target` is
+ * shifted to match. Staying in the same column (another string) keeps the
+ * entry session; anywhere else starts a new one.
+ */
+function goTo(state: EntryState, project: Project, target: Cursor): EntryResult {
+  const committed = commitDigits(state, project);
+  const from = state.cursor;
+  const insertConfirmed = state.inserting && committed.project !== project;
+  const shifted = insertConfirmed && from && target.measure === from.measure && target.column >= from.column;
+  const cursor = shifted ? { ...target, column: target.column + 1 } : target;
+
+  if (!state.inserting && sameColumn(from, cursor)) return withState(committed, { cursor });
+  return endEntryAt(committed, cursor);
 }
 
 /**
@@ -128,12 +162,12 @@ function commitDigits(state: EntryState, project: Project): EntryResult {
  */
 function space(state: EntryState, project: Project, reverse: boolean): EntryResult {
   const cursor = state.cursor;
-  if (!cursor) return unchanged(state, project);
+  if (!cursor) return projectUnchanged(state, project);
   if (state.digits !== "") return commitDigits(state, project);
 
-  const slot = project.measures[cursor.measure].slots[cursor.column];
+  const slot = slotAt(project, cursor);
   if (!slot || state.inserting) {
-    return place(state, project, cursor, () => ({ kind: "rest", duration: state.lastDuration }));
+    return placeAtCursor(state, project, cursor, () => ({ kind: "rest", duration: state.lastDuration }));
   }
 
   return changeDuration(state, project, reverse ? previousDuration(slot.duration) : nextDuration(slot.duration));
@@ -143,16 +177,16 @@ function space(state: EntryState, project: Project, reverse: boolean): EntryResu
  * it the last used duration. */
 function changeDuration(state: EntryState, project: Project, duration: Duration): EntryResult {
   const cursor = state.cursor;
-  if (!cursor || !project.measures[cursor.measure].slots[cursor.column]) return unchanged(state, project);
-  const result = edit(state, project, cursor, (measure) => setDurationAt(measure, cursor.column, duration));
-  return { ...result, state: { ...result.state, lastDuration: duration } };
+  if (!cursor || !slotAt(project, cursor)) return projectUnchanged(state, project);
+  const result = editMeasure(state, project, cursor, (measure) => setDurationAt(measure, cursor.column, duration));
+  return withState(result, { lastDuration: duration });
 }
 
 /** The toolbar: confirms anything typed, then sets the duration directly. */
 function pickDuration(state: EntryState, project: Project, duration: Duration): EntryResult {
   const committed = commitDigits(state, project);
   const changed = changeDuration(committed.state, committed.project, duration);
-  return { ...changed, pushHistory: committed.pushHistory || changed.pushHistory };
+  return { ...changed, needsUndoSnapshot: committed.needsUndoSnapshot || changed.needsUndoSnapshot };
 }
 
 /**
@@ -162,38 +196,23 @@ function pickDuration(state: EntryState, project: Project, duration: Duration): 
  */
 function backspace(state: EntryState, project: Project): EntryResult {
   const cursor = state.cursor;
-  if (state.digits !== "") return unchanged({ ...state, digits: state.digits.slice(0, -1) }, project);
-  if (state.inserting) return unchanged({ ...state, inserting: false }, project);
-  if (!cursor || !project.measures[cursor.measure].slots[cursor.column]) return unchanged(state, project);
+  if (state.digits !== "") return projectUnchanged({ ...state, digits: state.digits.slice(0, -1) }, project);
+  if (state.inserting) return projectUnchanged({ ...state, inserting: false }, project);
+  if (!cursor || !slotAt(project, cursor)) return projectUnchanged(state, project);
 
   // A removal starts and ends its own session, so it is always one undo
   // step of its own - never folded into an edit made just before it.
-  const removed = edit({ ...state, changedThisEntry: false }, project, cursor, (measure) =>
+  const removed = editMeasure({ ...state, changedThisEntry: false }, project, cursor, (measure) =>
     removeSlotAt(measure, cursor.column),
   );
-  return { ...removed, state: { ...removed.state, changedThisEntry: false } };
+  return withState(removed, { changedThisEntry: false });
 }
 
-/**
- * A click on a cell. It confirms what was being typed, the same as Enter.
- * Staying on the same column (another string) keeps the entry session;
- * anywhere else starts a new one.
- */
+/** A click on a cell - see {@link goTo}. A click on another string of the
+ * pending inserted column itself just changes the string. */
 function select(state: EntryState, project: Project, target: Cursor, onPending: boolean): EntryResult {
-  if (state.inserting && onPending) return unchanged({ ...state, cursor: target }, project);
-
-  const committed = commitDigits(state, project);
-  const from = state.cursor;
-  // Confirming a pending insert put a new column in front of every column
-  // from the insert point on, so the clicked one has moved up by one.
-  const shifted =
-    state.inserting && committed.project !== project && from && target.measure === from.measure && target.column >= from.column;
-  const cursor = shifted ? { ...target, column: target.column + 1 } : target;
-
-  if (!state.inserting && sameColumn(from, cursor)) {
-    return { ...committed, state: { ...committed.state, cursor } };
-  }
-  return moveTo(committed, cursor);
+  if (state.inserting && onPending) return projectUnchanged({ ...state, cursor: target }, project);
+  return goTo(state, project, target);
 }
 
 export function applyEntryInput(state: EntryState, project: Project, input: EntryInput): EntryResult {
@@ -201,15 +220,13 @@ export function applyEntryInput(state: EntryState, project: Project, input: Entr
     case "select":
       return select(state, project, input.cursor, input.pending ?? false);
     case "digit":
-      return unchanged({ ...state, digits: state.digits + input.digit }, project);
+      return projectUnchanged({ ...state, digits: state.digits + input.digit }, project);
     case "backspace":
       return backspace(state, project);
-    case "insert": {
+    case "insert":
       // Whatever was typed is confirmed first; the new column then opens
       // before the cursor's column, as a fresh entry session of its own.
-      const committed = commitDigits(state, project);
-      return { ...committed, state: { ...committed.state, inserting: true, changedThisEntry: false } };
-    }
+      return withState(commitDigits(state, project), { inserting: true, changedThisEntry: false });
     case "space":
       return space(state, project, input.reverse);
     case "setDuration":
@@ -219,12 +236,10 @@ export function applyEntryInput(state: EntryState, project: Project, input: Entr
       // something (a typed fret, a placed or cycled Rest), and otherwise
       // does nothing.
       const committed = commitDigits(state, project);
-      if (!state.cursor || !committed.state.changedThisEntry) {
-        return { ...committed, state: { ...committed.state, inserting: false } };
-      }
-      return moveTo(committed, { ...state.cursor, column: state.cursor.column + 1 });
+      if (!state.cursor || !committed.state.changedThisEntry) return withState(committed, { inserting: false });
+      return endEntryAt(committed, { ...state.cursor, column: state.cursor.column + 1 });
     }
     case "blur":
-      return moveTo(commitDigits(state, project), null);
+      return endEntryAt(commitDigits(state, project), null);
   }
 }

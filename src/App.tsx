@@ -156,7 +156,7 @@ function App() {
 
   function dispatchEntry(input: EntryInput) {
     const result = applyEntryInput(entry, project, input);
-    if (result.pushHistory) pushHistory();
+    if (result.needsUndoSnapshot) pushHistory();
     setProject(result.project);
     setEntry(result.state);
   }

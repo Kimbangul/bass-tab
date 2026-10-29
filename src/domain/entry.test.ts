@@ -17,7 +17,7 @@ function run(project: Project, inputs: EntryInput[], state: EntryState = INITIAL
   let pushes = 0;
   for (const input of inputs) {
     const result = applyEntryInput(state, project, input);
-    if (result.pushHistory) pushes++;
+    if (result.needsUndoSnapshot) pushes++;
     state = result.state;
     project = result.project;
   }
