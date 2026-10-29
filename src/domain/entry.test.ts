@@ -343,3 +343,99 @@ describe("duration toolbar", () => {
     expect(pushes).toBe(1);
   });
 });
+
+const left: EntryInput = { type: "move", direction: "left" };
+const right: EntryInput = { type: "move", direction: "right" };
+const up: EntryInput = { type: "move", direction: "up" };
+const down: EntryInput = { type: "move", direction: "down" };
+const tab: EntryInput = { type: "tab", reverse: false };
+const shiftTab: EntryInput = { type: "tab", reverse: true };
+
+describe("Tab and arrow-key navigation", () => {
+  it("moves Tab to the next column even when nothing changed (unlike Enter)", () => {
+    const { project, state, pushes } = run(projectOf([N(1), N(2)]), [select(0, 0), tab]);
+
+    expect(state.cursor).toEqual({ measure: 0, column: 1, string: 4 });
+    expect(project.measures[0].slots).toEqual([N(1), N(2)]);
+    expect(pushes).toBe(0);
+  });
+
+  it("confirms typed digits before moving", () => {
+    const { project, state } = run(projectOf([]), [select(0, 0), digit(5), right]);
+
+    expect(project.measures[0].slots).toEqual([{ kind: "note", string: 4, fret: 5, duration: "sixteenth" }]);
+    expect(state.cursor?.column).toBe(1);
+  });
+
+  it("moves Shift+Tab and ← to the previous column", () => {
+    expect(run(projectOf([N(1), N(2)]), [select(0, 1), shiftTab]).state.cursor?.column).toBe(0);
+    expect(run(projectOf([N(1), N(2)]), [select(0, 1), left]).state.cursor?.column).toBe(0);
+  });
+
+  it("continues → and Tab from an append column into the next Measure's first column", () => {
+    const start = projectOf([N(1)], [N(2)]);
+
+    expect(run(start, [select(0, 1), right]).state.cursor).toEqual({ measure: 1, column: 0, string: 4 });
+    expect(run(start, [select(0, 1), tab]).state.cursor).toEqual({ measure: 1, column: 0, string: 4 });
+  });
+
+  it("goes ← from a first column back to the previous Measure's append column", () => {
+    const { state } = run(projectOf([N(1), N(2)], [N(3)]), [select(1, 0), left]);
+
+    expect(state.cursor).toEqual({ measure: 0, column: 2, string: 4 });
+  });
+
+  it("stops at the ends of the Project without creating a Measure", () => {
+    const start = projectOf([N(1)]);
+
+    const atEnd = run(start, [select(0, 1), right, tab]);
+    expect(atEnd.state.cursor?.column).toBe(1);
+    expect(atEnd.project.measures).toHaveLength(1);
+
+    expect(run(start, [select(0, 0), left, shiftTab]).state.cursor?.column).toBe(0);
+  });
+
+  it("still never takes Enter into the next Measure", () => {
+    const { state } = run(projectOf([], []), [select(0, 0), digit(3), enter]);
+
+    expect(state.cursor).toEqual({ measure: 0, column: 1, string: 4 });
+  });
+
+  it("changes the string with ↑/↓, stopping at strings 1 and 4", () => {
+    expect(run(projectOf([N(1)]), [select(0, 0, 3), up]).state.cursor?.string).toBe(2);
+    expect(run(projectOf([N(1)]), [select(0, 0, 1), up]).state.cursor?.string).toBe(1);
+    expect(run(projectOf([N(1)]), [select(0, 0, 4), down]).state.cursor?.string).toBe(4);
+  });
+
+  it("keeps the undo session on ↑/↓ but ends it on ←/→", () => {
+    // Space, ↑, Space: one session on the same column -> one snapshot
+    expect(run(projectOf([N(1)]), [select(0, 0), space, up, space]).pushes).toBe(1);
+    // Space, →, ←, Space: the column was left in between -> two snapshots
+    expect(run(projectOf([N(1)]), [select(0, 0), space, right, left, space]).pushes).toBe(2);
+  });
+
+  it("cancels a pending insert when moving off it with nothing entered", () => {
+    const start = projectOf([N(1), N(3)]);
+
+    const forward = run(start, [select(0, 1), insert, right]);
+    expect(forward.project).toBe(start);
+    // → from the pending column lands on the column it was opened before
+    expect(forward.state).toMatchObject({ inserting: false, cursor: { column: 1 } });
+
+    const back = run(start, [select(0, 1), insert, left]);
+    expect(back.state).toMatchObject({ inserting: false, cursor: { column: 0 } });
+  });
+
+  it("confirms a pending insert with digits, then lands just after the new column", () => {
+    const { project, state } = run(projectOf([N(1), N(3)]), [select(0, 1), insert, digit(2), right]);
+
+    expect(project.measures[0].slots.map((s) => (s.kind === "note" ? s.fret : null))).toEqual([1, 2, 3]);
+    expect(state.cursor?.column).toBe(2);
+  });
+
+  it("selects the last Measure's append column when nothing is selected", () => {
+    const { state } = run(projectOf([N(1)], [N(2), N(3)]), [right]);
+
+    expect(state.cursor).toEqual({ measure: 1, column: 2, string: 4 });
+  });
+});

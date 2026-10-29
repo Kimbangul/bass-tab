@@ -164,16 +164,25 @@ function App() {
   // Maps the editor's keystrokes to entry inputs. Modified keys (Ctrl+Z and
   // friends) are left to their own handlers.
   function handleEditorKeyDown(e: React.KeyboardEvent) {
-    if (!entry.cursor || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     let input: EntryInput | null = null;
-    if (/^[0-9]$/.test(e.key)) input = { type: "digit", digit: Number(e.key) };
-    else if (e.key === "Enter") input = { type: "enter" };
-    else if (e.key === " ") input = { type: "space", reverse: e.shiftKey };
-    else if (e.key === "Backspace" || e.key === "Delete") input = { type: "backspace" };
-    else if (e.key === "Insert" || e.key.toLowerCase() === "i") input = { type: "insert" };
-    if (!input) return;
-    e.preventDefault();
-    dispatchEntry(input);
+    if (e.key === "Tab") input = { type: "tab", reverse: e.shiftKey };
+    else if (e.key === "ArrowLeft") input = { type: "move", direction: "left" };
+    else if (e.key === "ArrowRight") input = { type: "move", direction: "right" };
+    else if (e.key === "ArrowUp") input = { type: "move", direction: "up" };
+    else if (e.key === "ArrowDown") input = { type: "move", direction: "down" };
+    else if (entry.cursor) {
+      // Entry keys only mean something with a cell selected.
+      if (/^[0-9]$/.test(e.key)) input = { type: "digit", digit: Number(e.key) };
+      else if (e.key === "Enter") input = { type: "enter" };
+      else if (e.key === " ") input = { type: "space", reverse: e.shiftKey };
+      else if (e.key === "Backspace" || e.key === "Delete") input = { type: "backspace" };
+      else if (e.key === "Insert" || e.key.toLowerCase() === "i") input = { type: "insert" };
+    }
+    // Navigation keys never fall through to the browser's own focus change
+    // or page scroll while the editor has focus, selection or not.
+    if (input || e.key === " " || e.key === "Enter") e.preventDefault();
+    if (input) dispatchEntry(input);
   }
 
   function handleAddMeasure() {

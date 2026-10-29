@@ -54,6 +54,10 @@ export type EntryInput =
   | { type: "insert" }
   /** A duration picked on the toolbar for the selected Note or Rest. */
   | { type: "setDuration"; duration: Duration }
+  /** Arrow keys: ←/→ move between columns (crossing Measures), ↑/↓ between strings. */
+  | { type: "move"; direction: "left" | "right" | "up" | "down" }
+  /** Tab / Shift+Tab: the same column moves as →/←. */
+  | { type: "tab"; reverse: boolean }
   | { type: "blur" };
 
 export interface EntryResult {
@@ -208,6 +212,58 @@ function backspace(state: EntryState, project: Project): EntryResult {
   return withState(removed, { changedThisEntry: false });
 }
 
+/** The last Measure's append column, on the bottom string - where keyboard
+ * navigation starts when nothing is selected. */
+function lastAppendColumn(project: Project): Cursor | null {
+  const measure = project.measures.length - 1;
+  if (measure < 0) return null;
+  return { measure, column: project.measures[measure].slots.length, string: 4 };
+}
+
+/**
+ * ←/→ and Shift+Tab/Tab: confirm anything typed, then move one column. The
+ * neighbor is worked out after confirming, so typing on an append column
+ * and pressing → lands on the new append column. Off a pending inserted
+ * column (nothing typed), → lands on the column it was opened before and
+ * ← on the one before that. Past a Measure's append column the cursor
+ * continues into the next Measure's first column, and before a first
+ * column into the previous Measure's append column. The ends of the
+ * Project stop it. Any actual move ends the entry session.
+ */
+function moveColumn(state: EntryState, project: Project, delta: 1 | -1): EntryResult {
+  if (!state.cursor) return projectUnchanged({ ...state, cursor: lastAppendColumn(project) }, project);
+
+  const committed = commitDigits(state, project);
+  const from = committed.state.cursor!;
+  const measures = committed.project.measures;
+  const pendingInsert = committed.state.inserting;
+  let measure = from.measure;
+  let column = pendingInsert && delta === 1 ? from.column : from.column + delta;
+
+  if (column > measures[measure].slots.length) {
+    if (measure + 1 >= measures.length) return committed;
+    measure += 1;
+    column = 0;
+  } else if (column < 0) {
+    if (measure === 0) return committed;
+    measure -= 1;
+    column = measures[measure].slots.length;
+  }
+  return endEntryAt(committed, { ...from, measure, column });
+}
+
+/** ↑/↓: confirm anything typed, then move to the neighboring string of the
+ * same column, stopping at strings 1 and 4. The entry session stays open,
+ * as it does for a click on another string of the same column. */
+function moveString(state: EntryState, project: Project, delta: 1 | -1): EntryResult {
+  if (!state.cursor) return projectUnchanged({ ...state, cursor: lastAppendColumn(project) }, project);
+
+  const committed = commitDigits(state, project);
+  const from = committed.state.cursor!;
+  const string = Math.min(4, Math.max(1, from.string + delta)) as StringNumber;
+  return withState(committed, { cursor: { ...from, string } });
+}
+
 /** A click on a cell - see {@link goTo}. A click on another string of the
  * pending inserted column itself just changes the string. */
 function select(state: EntryState, project: Project, target: Cursor, onPending: boolean): EntryResult {
@@ -239,6 +295,12 @@ export function applyEntryInput(state: EntryState, project: Project, input: Entr
       if (!state.cursor || !committed.state.changedThisEntry) return withState(committed, { inserting: false });
       return endEntryAt(committed, { ...state.cursor, column: state.cursor.column + 1 });
     }
+    case "move":
+      if (input.direction === "up") return moveString(state, project, -1);
+      if (input.direction === "down") return moveString(state, project, 1);
+      return moveColumn(state, project, input.direction === "right" ? 1 : -1);
+    case "tab":
+      return moveColumn(state, project, input.reverse ? -1 : 1);
     case "blur":
       return endEntryAt(commitDigits(state, project), null);
   }
