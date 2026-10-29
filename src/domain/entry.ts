@@ -147,6 +147,11 @@ function commitDigits(state: EntryState, project: Project): EntryResult {
  * column from the insert point on has moved up by one, so `target` is
  * shifted to match. Staying in the same column (another string) keeps the
  * entry session; anywhere else starts a new one.
+ *
+ * Used by clicks, whose target is a cell on screen. Arrow keys and Tab
+ * don't go through here: their target is "the neighbor", which is only
+ * known after confirming (typing on an append column and pressing → must
+ * land on the new append column) - see moveColumn/moveString.
  */
 function goTo(state: EntryState, project: Project, target: Cursor): EntryResult {
   const committed = commitDigits(state, project);

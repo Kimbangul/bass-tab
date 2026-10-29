@@ -20,3 +20,11 @@
 - [ ] Helper and result-field names say what they mean (e.g. "Project unchanged" rather than "unchanged"; "needs undo snapshot" rather than "push history")
 - [ ] No reducer test changes behavior: the existing suite passes with at most mechanical renames
 - [ ] Type check and lint pass
+
+## Comments
+
+- Code review after tickets 07-09: navigation ended up not routing through `goTo`.
+  - A click targets a cell on screen, which works in before-confirm coordinates.
+  - An arrow or Tab targets "the neighbor", which is only known after confirming digits. For example, typing on an append column and pressing → must land on the new append column, not cross into the next Measure.
+  - So `goTo` serves clicks only, and its doc comment now says why.
+  - The criterion "one shared step for clicks and navigation" is met only partly. The other cleanup items were done.

@@ -178,11 +178,14 @@ function App() {
   const selectedSlot =
     entry.cursor && !entry.inserting ? project.measures[entry.cursor.measure]?.slots[entry.cursor.column] : undefined;
 
-  function dispatchEntry(input: EntryInput) {
+  /** Applies `input`; returns whether it moved the cursor (or opened/closed
+   * a pending insert), i.e. whether the cursor's cell may need revealing. */
+  function dispatchEntry(input: EntryInput): boolean {
     const result = applyEntryInput(entry, project, input);
     if (result.needsUndoSnapshot) pushHistory();
     setProject(result.project);
     setEntry(result.state);
+    return result.state.cursor !== entry.cursor || result.state.inserting !== entry.inserting;
   }
 
   // Maps the editor's keystrokes to entry inputs. Modified keys (Ctrl+Z and
@@ -207,8 +210,9 @@ function App() {
     // or page scroll while the editor has focus, selection or not.
     if (input || e.key === " " || e.key === "Enter") e.preventDefault();
     if (!input) return;
-    revealCursorRef.current = true;
-    dispatchEntry(input);
+    // Only a key that actually moved the cursor may scroll, so the flag is
+    // never left set for some later, non-keyboard cursor change.
+    revealCursorRef.current = dispatchEntry(input);
   }
 
   function handleAddMeasure() {
