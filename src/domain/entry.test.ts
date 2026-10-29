@@ -237,6 +237,15 @@ describe("Delete", () => {
   });
 });
 
+describe("Delete, within an open entry", () => {
+  it("is its own undo step even right after a change on the same column", () => {
+    const { project, pushes } = run(projectOf([]), [select(0, 0), digit(5), space, backspace]);
+
+    expect(project.measures[0].slots).toEqual([]);
+    expect(pushes).toBe(2);
+  });
+});
+
 describe("Insert", () => {
   it("inserts a typed Note before the cursor's column, with the last used duration", () => {
     const { project, state } = run(projectOf([N(1), N(3)]), [select(0, 1), insert, digit(2), enter]);

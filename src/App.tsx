@@ -103,10 +103,10 @@ function App() {
     apiRef.current?.renderScore(projectToScore(project));
   }, [project]);
 
-  // Ctrl+Z / Ctrl+Shift+Z undo/redo, ignored while any text input has focus
-  // (the MeasureGrid fret-entry input's own Backspace/Delete handling, and a
-  // text input's native browser undo, both take priority over the app-wide
-  // shortcut instead of fighting it).
+  // Ctrl+Z / Ctrl+Shift+Z undo/redo, ignored while a text input (the
+  // Project title) has focus so its native browser undo takes priority.
+  // Undoing during a grid entry drops any unconfirmed fret digits along
+  // with the selection.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (!e.ctrlKey || e.key.toLowerCase() !== "z") return;
@@ -134,9 +134,10 @@ function App() {
   }
 
   // After undo/redo or a Load the cursor may point past the end of a
-  // Measure that no longer has those columns, so drop the selection.
+  // Measure that no longer has those columns, so drop the selection and
+  // end the entry session (keeping only the last used duration).
   function deselect() {
-    setEntry((prev) => ({ ...prev, cursor: null, digits: "" }));
+    setEntry((prev) => ({ ...INITIAL_ENTRY_STATE, lastDuration: prev.lastDuration }));
   }
 
   function handleUndo() {

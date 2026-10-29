@@ -166,7 +166,11 @@ function backspace(state: EntryState, project: Project): EntryResult {
   if (state.inserting) return unchanged({ ...state, inserting: false }, project);
   if (!cursor || !project.measures[cursor.measure].slots[cursor.column]) return unchanged(state, project);
 
-  const removed = edit(state, project, cursor, (measure) => removeSlotAt(measure, cursor.column));
+  // A removal starts and ends its own session, so it is always one undo
+  // step of its own - never folded into an edit made just before it.
+  const removed = edit({ ...state, changedThisEntry: false }, project, cursor, (measure) =>
+    removeSlotAt(measure, cursor.column),
+  );
   return { ...removed, state: { ...removed.state, changedThisEntry: false } };
 }
 
