@@ -1,4 +1,4 @@
-# 06: Arrow-key and Tab navigation
+# 07: Arrow-key and Tab navigation
 
 **What to build:** Let the user move the cursor without the mouse:
 - **Tab / Shift+Tab** confirm anything typed and always move to the next or previous column, even when nothing changed. Enter is unchanged: it moves only when the entry changed something.
@@ -6,7 +6,7 @@
 - **→/Tab** at a Measure's append column continue into the next Measure. **←/Shift+Tab** at a Measure's first column go back to the previous Measure's append column.
 - With nothing selected, an arrow key or Tab selects the last Measure's append column.
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** 06 (entry reducer prefactor)
 
 **Status:** ready-for-agent
 

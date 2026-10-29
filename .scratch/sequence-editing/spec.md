@@ -105,7 +105,7 @@ Nothing is blocked and nothing is flagged when a Measure is longer or shorter th
   - There is one duration toolbar above all Measures. It is always rendered and sticks to the top of the viewport. It is enabled and highlights the duration when a Note or Rest is selected, and is disabled otherwise (nothing selected, the append column, or a pending insert). It never appears or disappears, so it never shifts the layout.
 - **Rendering adapter**: `projectToScore` must turn an empty Measure (zero slots) into a renderable AlphaTab bar. The likely fix is a single empty beat, which is invisible and adapter-only; it never enters the `Project`. Measures that overflow or underflow their time signature are passed through as-is.
 - **Persistence**: no change and no migration. Old saves read as sequences that contain their former backfilled Rests.
-- **Navigation (tickets 06-08)**: `EntryInput` gains `move` with a direction (left, right, up, down) and `tab` (with a reverse flag for Shift+Tab).
+- **Navigation (tickets 07-09)**: `EntryInput` gains `move` with a direction (left, right, up, down) and `tab` (with a reverse flag for Shift+Tab).
   - **Tab**: confirms pending digits, then always moves one column forward or back. It moves even when nothing changed, unlike Enter.
   - **←/→**: confirm pending digits, then move one column, just as a click on that column would. They end the entry session.
   - **↑/↓**: change the string within the same column. They keep the entry session open, as a click on another string of the same column does. They stop at strings 1 and 4 instead of wrapping.
@@ -140,7 +140,7 @@ Nothing is blocked and nothing is flagged when a Measure is longer or shorter th
 
 ## Out of Scope
 
-- Enter crossing into the next Measure. Tab and the arrow keys do cross (tickets 06-08).
+- Enter crossing into the next Measure. Tab and the arrow keys do cross (tickets 07-09).
 - Any over/under-capacity indicator, auto-split, or auto-tie across Measures.
 - A shortcut for turning an existing Note into a Rest in place. The way to do it is Delete, then `I`, then Space.
 - Moving Notes between Measures and cross-Measure reflow. Edits stay within one Measure.

@@ -1,4 +1,4 @@
-# 07: One sticky duration toolbar, no layout jumps
+# 08: One sticky duration toolbar, no layout jumps
 
 **What to build:** Stop the grid from jumping when Space or Enter is pressed.
 
