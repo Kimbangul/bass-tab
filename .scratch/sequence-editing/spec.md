@@ -58,6 +58,15 @@ Nothing is blocked and nothing is flagged when a Measure is longer or shorter th
 23. As a bass player, I want Projects I saved under the old grid to open and keep working, so that switching models doesn't cost me my work.
 24. As a bass player, I want the AlphaTab notation to keep rendering for Measures that are empty, short, or overfull, so that the score preview never breaks while I'm mid-entry.
 25. As a developer, I want the whole keyboard entry flow implemented as a pure reducer, so that behaviors like "`5 Space Space Enter` gives a 1/8 Note at fret 5 and moves the cursor" are unit-testable without the DOM.
+26. As a bass player, I want Tab to always move to the next column (Shift+Tab to the previous), confirming anything I typed, so that I can skip past columns without changing them.
+27. As a bass player, I want ←/→ to move between columns and ↑/↓ between strings, so that I can pick the column to fix without the mouse.
+28. As a bass player, I want →/Tab at a Measure's append column to continue into the next Measure's first column (and ←/Shift+Tab at a first column to go back to the previous Measure's append column), so that the arrow keys walk the whole Project.
+29. As a bass player, I want Enter to keep stopping at a Measure's append column, so that tapping Enter while transcribing never wanders into the next Measure.
+30. As a bass player, I want ↑ on the top string and ↓ on the bottom string to stay put, so that the cursor never wraps somewhere unexpected.
+31. As a bass player, I want an arrow key or Tab with nothing selected to select the last Measure's append column, so that I can pick up entry from the keyboard after an undo.
+32. As a bass player, I want Space and Enter never to scroll the page, so that the grid doesn't jump while I'm entering.
+33. As a bass player, I want a single duration toolbar that always stays in the same place above the Measures and sticks to the top of the screen as I scroll, so that selecting or leaving a column never shifts the layout.
+34. As a bass player, I want the page to scroll only when the cursor moves off-screen, and then only as far as needed to show it, so that the cursor stays visible without the page moving otherwise.
 
 ## Implementation Decisions
 
@@ -93,9 +102,17 @@ Nothing is blocked and nothing is flagged when a Measure is longer or shorter th
   - Each column shows a duration label.
   - A Note shows its fret on its own string's row.
   - A Rest shows one mark across all four rows.
-  - The duration toolbar shows for any selected Note or Rest and highlights its duration.
+  - There is one duration toolbar above all Measures. It is always rendered and sticks to the top of the viewport. It is enabled and highlights the duration when a Note or Rest is selected, and is disabled otherwise (nothing selected, the append column, or a pending insert). It never appears or disappears, so it never shifts the layout.
 - **Rendering adapter**: `projectToScore` must turn an empty Measure (zero slots) into a renderable AlphaTab bar. The likely fix is a single empty beat, which is invisible and adapter-only; it never enters the `Project`. Measures that overflow or underflow their time signature are passed through as-is.
 - **Persistence**: no change and no migration. Old saves read as sequences that contain their former backfilled Rests.
+- **Navigation (tickets 06-08)**: `EntryInput` gains `move` with a direction (left, right, up, down) and `tab` (with a reverse flag for Shift+Tab).
+  - **Tab**: confirms pending digits, then always moves one column forward or back. It moves even when nothing changed, unlike Enter.
+  - **←/→**: confirm pending digits, then move one column, just as a click on that column would. They end the entry session.
+  - **↑/↓**: change the string within the same column. They keep the entry session open, as a click on another string of the same column does. They stop at strings 1 and 4 instead of wrapping.
+  - **Crossing Measures**: →/Tab from a Measure's append column go to the next Measure's column 0. ←/Shift+Tab from column 0 go to the previous Measure's append column. The ends of the Project stop the cursor. Measures are never created. Enter still never crosses a Measure.
+  - **A pending inserted column**: moving away with nothing entered cancels it, and with digits entered confirms it. This is the same as a click, including the index shift when moving forward past the new column.
+  - **Nothing selected**: an arrow key or Tab selects the last Measure's append column.
+  - **Page scrolling**: while the editor has focus, Space, Enter, Tab and the arrow keys never trigger the browser's default action, selection or not. When the cursor's cell ends up outside the viewport, it is scrolled into view by the minimum distance (`nearest`). A cursor that is already visible never scrolls.
 
 ## Testing Decisions
 
@@ -112,11 +129,18 @@ Nothing is blocked and nothing is flagged when a Measure is longer or shorter th
 - **Domain editing functions** (rewritten, test-first): replace, insert, remove, set duration, the duration cycle (including wraparound), and add measure (empty). The overwrite/backfill tests in the existing editing test file are deleted with the behavior they covered.
 - **Rendering adapter**: add cases for an empty Measure and an overfull Measure, following `projectToScore.test.ts`.
 - **Prior art**: `projectToScore.test.ts` and the editing and history test files. Inputs are small hand-built `Project`/`Measure` values, with one behavior per test, written red before green.
+- **Navigation** is tested in the reducer the same way. Examples:
+  - Tab with nothing changed still moves.
+  - → from the append column lands on the next Measure's column 0.
+  - ← from column 0 of the first Measure stays put, and so does ↑ on string 1.
+  - ↑/↓ keep the undo session, while ←/→ end it.
+  - Moving off a pending insert cancels it (nothing typed) or confirms it (digits typed).
+  - An arrow key with nothing selected selects the last Measure's append column.
 - **Not unit-tested**: DOM event → `EntryInput` mapping, focus handling, column rendering, and the toolbar's mouse handling. These are thin wiring around the reducer.
 
 ## Out of Scope
 
-- Moving the cursor between Measures with the keyboard (arrow keys, Enter at the end of a Measure crossing over). The user clicks into the next Measure.
+- Enter crossing into the next Measure. Tab and the arrow keys do cross (tickets 06-08).
 - Any over/under-capacity indicator, auto-split, or auto-tie across Measures.
 - A shortcut for turning an existing Note into a Rest in place. The way to do it is Delete, then `I`, then Space.
 - Moving Notes between Measures and cross-Measure reflow. Edits stay within one Measure.
