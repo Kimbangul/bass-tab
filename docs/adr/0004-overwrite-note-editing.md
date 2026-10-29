@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by 0006
 ---
 
 # Overwrite-based note editing, not insert-and-shift

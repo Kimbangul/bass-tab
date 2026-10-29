@@ -11,12 +11,16 @@ The single bass tab document a user is working on: a title, a fixed 4-string tun
 _Avoid_: Song, File, Document, Score
 
 **Measure**:
-A segment of a Project holding a fixed number of beats set by the time signature; Notes are placed within a Measure and rhythmically aligned to it.
+A segment of a Project holding an ordered sequence of Notes and Rests. Its time signature is a label, not a capacity — a Measure may hold more or less than its time signature implies.
 _Avoid_: Bar
 
 **Note**:
-A single played pitch within a Measure: a string, a fret number, and a duration. An unfilled position in a Measure is a rest, not a Note.
+A single played pitch within a Measure: a string, a fret number, and a duration.
 _Avoid_: Beat, Event
+
+**Rest**:
+A place in a Measure's sequence where nothing is played for a given duration. Uses the same durations as a Note and belongs to no particular string.
+_Avoid_: Empty cell, Silence
 
 **Tuning**:
 The fixed mapping of the bass's four strings to pitches (standard E-A-D-G in v1). Not user-configurable yet.
