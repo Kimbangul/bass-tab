@@ -169,6 +169,7 @@ function App() {
     else if (e.key === "Enter") input = { type: "enter" };
     else if (e.key === " ") input = { type: "space", reverse: e.shiftKey };
     else if (e.key === "Backspace" || e.key === "Delete") input = { type: "backspace" };
+    else if (e.key === "Insert" || e.key.toLowerCase() === "i") input = { type: "insert" };
     if (!input) return;
     e.preventDefault();
     dispatchEntry(input);
@@ -277,7 +278,10 @@ function App() {
             measure={measure}
             cursor={entry.cursor?.measure === index ? entry.cursor : null}
             digits={entry.digits}
-            onSelect={(column, string) => dispatchEntry({ type: "select", cursor: { measure: index, column, string } })}
+            inserting={entry.inserting}
+            onSelect={(column, string, pending) =>
+              dispatchEntry({ type: "select", cursor: { measure: index, column, string }, pending })
+            }
             onChangeDuration={(column, duration) => handleChangeDuration(index, column, duration)}
           />
         ))}

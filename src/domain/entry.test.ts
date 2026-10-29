@@ -207,3 +207,99 @@ describe("Space", () => {
     expect(state.cursor?.column).toBe(0);
   });
 });
+
+const backspace: EntryInput = { type: "backspace" };
+const insert: EntryInput = { type: "insert" };
+const N = (fret: number) => ({ kind: "note", string: 4, fret, duration: "quarter" }) as const;
+
+describe("Delete", () => {
+  it("removes the selected column when nothing is typed, closing the gap", () => {
+    const { project, state } = run(projectOf([N(1), N(2), N(3)]), [select(0, 1), backspace]);
+
+    expect(project.measures[0].slots).toEqual([N(1), N(3)]);
+    expect(state.cursor?.column).toBe(1);
+  });
+
+  it("does nothing on the append column", () => {
+    const start = projectOf([N(1)]);
+
+    const { project, pushes } = run(start, [select(0, 1), backspace]);
+
+    expect(project).toBe(start);
+    expect(pushes).toBe(0);
+  });
+
+  it("counts each removal as its own undo step", () => {
+    const { project, pushes } = run(projectOf([N(1), N(2), N(3)]), [select(0, 0), backspace, backspace]);
+
+    expect(project.measures[0].slots).toEqual([N(3)]);
+    expect(pushes).toBe(2);
+  });
+});
+
+describe("Insert", () => {
+  it("inserts a typed Note before the cursor's column, with the last used duration", () => {
+    const { project, state } = run(projectOf([N(1), N(3)]), [select(0, 1), insert, digit(2), enter]);
+
+    expect(project.measures[0].slots).toEqual([N(1), { ...N(2), duration: "sixteenth" }, N(3)]);
+    expect(state.cursor?.column).toBe(2);
+  });
+
+  it("inserts a Rest on Space and keeps it selected for cycling", () => {
+    const { project } = run(projectOf([N(1), N(3)]), [select(0, 1), insert, space, space]);
+
+    expect(project.measures[0].slots).toEqual([N(1), { kind: "rest", duration: "eighth" }, N(3)]);
+  });
+
+  it.each([
+    ["a blur", { type: "blur" } as EntryInput],
+    ["an empty Enter", enter],
+    ["selecting another cell", select(0, 0)],
+    ["Backspace", backspace],
+  ])("inserts nothing and records no undo step when left by %s with nothing entered", (_, leave) => {
+    const start = projectOf([N(1), N(3)]);
+
+    const { project, pushes } = run(start, [select(0, 1), insert, leave]);
+
+    expect(project).toBe(start);
+    expect(pushes).toBe(0);
+  });
+
+  it("is its own undo step, even right after another entry on the same column", () => {
+    const { project, pushes } = run(projectOf([]), [select(0, 0), digit(5), space, insert, digit(3), enter]);
+
+    expect(project.measures[0].slots.map((s) => (s.kind === "note" ? s.fret : null))).toEqual([3, 5]);
+    expect(pushes).toBe(2);
+  });
+
+  it("lands on the clicked column even though confirming the insert shifted it", () => {
+    const { project, state } = run(projectOf([N(1), N(3)]), [select(0, 1), insert, digit(2), select(0, 1)]);
+
+    expect(project.measures[0].slots.map((s) => (s.kind === "note" ? s.fret : null))).toEqual([1, 2, 3]);
+    // the click was on the column holding fret 3, now at index 2
+    expect(state.cursor?.column).toBe(2);
+    expect(state.inserting).toBe(false);
+  });
+
+  it("is cancelled by clicking the existing column it was opened before", () => {
+    const { state } = run(projectOf([N(1), N(3)]), [select(0, 1), insert, select(0, 1)]);
+
+    expect(state.inserting).toBe(false);
+  });
+
+  it("stays open when another string of the pending column itself is clicked", () => {
+    const pendingClick: EntryInput = { type: "select", cursor: { measure: 0, column: 1, string: 2 }, pending: true };
+
+    const { state } = run(projectOf([N(1), N(3)]), [select(0, 1), insert, pendingClick]);
+
+    expect(state.inserting).toBe(true);
+    expect(state.cursor).toEqual({ measure: 0, column: 1, string: 2 });
+  });
+
+  it("is cancelled by an empty Enter, leaving the cursor on the column it was opened before", () => {
+    const { state } = run(projectOf([N(1), N(3)]), [select(0, 1), insert, enter]);
+
+    expect(state.inserting).toBe(false);
+    expect(state.cursor?.column).toBe(1);
+  });
+});
