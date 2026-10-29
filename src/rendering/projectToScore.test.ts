@@ -102,6 +102,61 @@ describe("projectToScore", () => {
     expect(secondMeasureBeats[0].notes[0].string).toBe(2);
   });
 
+  it("gives an empty Measure one empty beat so AlphaTab has something to draw", () => {
+    const project: Project = {
+      title: "Untitled",
+      tuning: STANDARD_BASS_TUNING,
+      measures: [{ timeSignature: { numerator: 4, denominator: 4 }, slots: [] }],
+    };
+
+    const score = projectToScore(project);
+    const beats = score.tracks[0].staves[0].bars[0].voices[0].beats;
+
+    expect(beats.length).toBe(1);
+    expect(beats[0].isEmpty).toBe(true);
+    // Adapter-only padding - the Project itself stays empty.
+    expect(project.measures[0].slots).toEqual([]);
+  });
+
+  it("passes an overfull Measure through with every slot, in order", () => {
+    const frets = [0, 1, 2, 3, 4, 5, 6];
+    const project: Project = {
+      title: "Untitled",
+      tuning: STANDARD_BASS_TUNING,
+      measures: [
+        {
+          timeSignature: { numerator: 4, denominator: 4 },
+          // seven quarters in a 4/4 Measure (ADR-0006: the time signature is a label)
+          slots: frets.map((fret) => ({ kind: "note", string: 4, fret, duration: "quarter" })),
+        },
+      ],
+    };
+
+    const score = projectToScore(project);
+    const beats = score.tracks[0].staves[0].bars[0].voices[0].beats;
+
+    expect(beats.map((b) => b.notes[0].fret)).toEqual(frets);
+  });
+
+  it("passes a short Measure through without padding it out to its time signature", () => {
+    const project: Project = {
+      title: "Untitled",
+      tuning: STANDARD_BASS_TUNING,
+      measures: [
+        {
+          timeSignature: { numerator: 4, denominator: 4 },
+          slots: [{ kind: "note", string: 4, fret: 3, duration: "quarter" }],
+        },
+      ],
+    };
+
+    const score = projectToScore(project);
+    const beats = score.tracks[0].staves[0].bars[0].voices[0].beats;
+
+    expect(beats.length).toBe(1);
+    expect(beats[0].duration).toBe(model.Duration.Quarter);
+  });
+
   it("finishes the score so it's actually renderable (populates derived beat fields)", () => {
     const project: Project = {
       title: "Untitled",

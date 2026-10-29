@@ -73,6 +73,15 @@ function buildBar(measure: Measure, stringCount: number): model.Bar {
     voice.addBeat(beat);
   }
 
+  // An empty Measure (ADR-0006: a new Measure starts with no slots) still
+  // needs one beat for AlphaTab to lay out a bar. Adapter-only - never
+  // written back into the Project.
+  if (measure.slots.length === 0) {
+    const beat = new model.Beat();
+    beat.isEmpty = true;
+    voice.addBeat(beat);
+  }
+
   bar.addVoice(voice);
   return bar;
 }
