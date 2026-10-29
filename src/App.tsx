@@ -6,6 +6,7 @@ import { applyEntryInput, INITIAL_ENTRY_STATE, type EntryInput, type EntryState 
 import { clear, createHistory, push, redo, undo, type History } from "./domain/history";
 import type { Project, TimeSignature } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
+import { DurationToolbar } from "./editor/DurationToolbar";
 import { MeasureGrid } from "./editor/MeasureGrid";
 import { exportJpg } from "./export/exportJpg";
 import { loadProjectFromIndexedDB, saveProjectToIndexedDB } from "./persistence/autosave";
@@ -57,6 +58,8 @@ function App() {
   // applyEntryInput.
   const [entry, setEntry] = useState<EntryState>(INITIAL_ENTRY_STATE);
   const editorRef = useRef<HTMLDivElement>(null);
+  // Set by a keyboard input so the next cursor change may scroll it into view.
+  const revealCursorRef = useRef(false);
   // Gates auto-save until the restore attempt below finishes - otherwise the
   // initial empty Project could get auto-saved first and overwrite a real
   // one before it's ever read back.
@@ -89,6 +92,10 @@ function App() {
       },
       player: {
         enablePlayer: false,
+        // AlphaTab's cursor auto-scroll runs on every re-render even with the
+        // player off, scrolling the page down to the score after each edit
+        // (e.g. a Space or Enter in the grid). The editor scrolls itself.
+        scrollMode: "off",
       },
     });
     apiRef.current = api;
@@ -102,6 +109,18 @@ function App() {
   useEffect(() => {
     apiRef.current?.renderScore(projectToScore(project));
   }, [project]);
+
+  // After a keyboard input, bring the cursor's cell into view only if it is
+  // off-screen, and only as far as needed (`nearest`; the cell's
+  // scroll-margin keeps it clear of the sticky toolbar). A visible cursor,
+  // or a click (the clicked cell is on screen already), never scrolls.
+  useEffect(() => {
+    if (!revealCursorRef.current) return;
+    revealCursorRef.current = false;
+    editorRef.current
+      ?.querySelector(".measure-grid-cell.selected")
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [entry.cursor, entry.inserting]);
 
   // Ctrl+Z / Ctrl+Shift+Z undo/redo, ignored while a text input (the
   // Project title) has focus so its native browser undo takes priority.
@@ -154,6 +173,11 @@ function App() {
     deselect();
   }
 
+  // The Note or Rest the duration toolbar acts on - none with nothing
+  // selected, on an append column, or on a pending insert.
+  const selectedSlot =
+    entry.cursor && !entry.inserting ? project.measures[entry.cursor.measure]?.slots[entry.cursor.column] : undefined;
+
   function dispatchEntry(input: EntryInput) {
     const result = applyEntryInput(entry, project, input);
     if (result.needsUndoSnapshot) pushHistory();
@@ -182,7 +206,9 @@ function App() {
     // Navigation keys never fall through to the browser's own focus change
     // or page scroll while the editor has focus, selection or not.
     if (input || e.key === " " || e.key === "Enter") e.preventDefault();
-    if (input) dispatchEntry(input);
+    if (!input) return;
+    revealCursorRef.current = true;
+    dispatchEntry(input);
   }
 
   function handleAddMeasure() {
@@ -273,6 +299,10 @@ function App() {
           if (!editorRef.current?.contains(e.relatedTarget as Node | null)) dispatchEntry({ type: "blur" });
         }}
       >
+        <DurationToolbar
+          selected={selectedSlot?.duration ?? null}
+          onPick={(duration) => dispatchEntry({ type: "setDuration", duration })}
+        />
         {project.measures.map((measure, index) => (
           <MeasureGrid
             key={index}
@@ -280,10 +310,11 @@ function App() {
             cursor={entry.cursor?.measure === index ? entry.cursor : null}
             digits={entry.digits}
             inserting={entry.inserting}
-            onSelect={(column, string, pending) =>
-              dispatchEntry({ type: "select", cursor: { measure: index, column, string }, pending })
-            }
-            onPickDuration={(duration) => dispatchEntry({ type: "setDuration", duration })}
+            onSelect={(column, string, pending) => {
+              // A click never scrolls, even if an earlier key left the flag set.
+              revealCursorRef.current = false;
+              dispatchEntry({ type: "select", cursor: { measure: index, column, string }, pending });
+            }}
           />
         ))}
       </div>

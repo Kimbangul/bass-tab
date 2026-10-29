@@ -1,14 +1,7 @@
-import { DURATIONS_LARGEST_FIRST } from "../domain/editing";
-import type { Duration, Measure, MeasureSlot, StringNumber } from "../domain/project";
+import type { Measure, MeasureSlot, StringNumber } from "../domain/project";
+import { DURATION_LABELS } from "./durationLabels";
 
 const STRINGS: StringNumber[] = [1, 2, 3, 4];
-const DURATION_LABELS: Record<Duration, string> = {
-  whole: "1/1",
-  half: "1/2",
-  quarter: "1/4",
-  eighth: "1/8",
-  sixteenth: "1/16",
-};
 
 interface Props {
   measure: Measure;
@@ -20,8 +13,6 @@ interface Props {
   inserting: boolean;
   /** `pending`: the click was on the pending inserted column itself. */
   onSelect: (column: number, string: StringNumber, pending: boolean) => void;
-  /** A duration picked on the toolbar for the selected Note or Rest. */
-  onPickDuration: (duration: Duration) => void;
 }
 
 /** One rendered column: a slot, the append column (no slot), or the pending
@@ -50,35 +41,11 @@ function displayColumns(measure: Measure, pendingAt: number | null): DisplayColu
  * Purely presentational - keystrokes are handled by the surrounding editor
  * (App) through the entry reducer; this only reports clicks.
  */
-export function MeasureGrid({ measure, cursor, digits, inserting, onSelect, onPickDuration }: Props) {
+export function MeasureGrid({ measure, cursor, digits, inserting, onSelect }: Props) {
   const columns = displayColumns(measure, inserting && cursor ? cursor.column : null);
   const columnCount = columns.length;
-  // The Note or Rest the toolbar acts on - none on the append column or a pending insert.
-  const selectedSlot = cursor && !inserting ? measure.slots[cursor.column] : undefined;
 
   return (
-    <>
-      {selectedSlot && (
-        <div className="duration-toolbar">
-          {DURATIONS_LARGEST_FIRST.map((duration) => (
-            <button
-              key={duration}
-              type="button"
-              tabIndex={-1}
-              className={duration === selectedSlot.duration ? "active" : ""}
-              // Keeps keyboard focus on the editor, so clicking the toolbar
-              // doesn't read as leaving the entry.
-              onMouseDown={(e) => e.preventDefault()}
-              onTouchStart={(e) => e.preventDefault()}
-              onClick={() => {
-                if (duration !== selectedSlot.duration) onPickDuration(duration);
-              }}
-            >
-              {DURATION_LABELS[duration]}
-            </button>
-          ))}
-        </div>
-      )}
       <div className="measure-grid" style={{ gridTemplateColumns: `repeat(${columnCount}, 2rem)` }}>
         {columns.map(({ column, slot, pending }, index) => {
           const gridColumn = index + 1;
@@ -113,6 +80,5 @@ export function MeasureGrid({ measure, cursor, digits, inserting, onSelect, onPi
           ];
         })}
       </div>
-    </>
   );
 }
