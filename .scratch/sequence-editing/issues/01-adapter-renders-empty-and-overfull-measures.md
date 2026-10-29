@@ -11,3 +11,11 @@
 - [ ] A Measure whose slots fall short of its time signature converts with only those slots, and nothing is padded into the Project
 - [ ] Each case is covered in the adapter's test file, written test-first, asserting on the returned Score shape
 - [ ] Check by hand in the running app that AlphaTab actually draws an empty bar and an overfull bar without errors, and note the result in this ticket's Comments
+
+## Comments
+
+- Manual check in the running app (Chrome, after ticket 02 landed):
+  - An empty 4/4 Measure draws as a bar holding one rest.
+  - A Measure with 3 sixteenths (short) draws as just those 3.
+  - A Measure with 18 sixteenths (overfull) draws all 18 in one bar.
+  - No console errors from the app in any case.

@@ -1,266 +1,98 @@
 import { describe, expect, it } from "vitest";
-import { addMeasure, changeDuration, deleteNoteAt, placeNoteAt, placeRestAt, ticksPerMeasure } from "./editing";
-import type { Measure, Project } from "./project";
+import { addMeasure, createEmptyMeasure, insertSlotAt, removeSlotAt, setDurationAt, setSlotAt } from "./editing";
+import type { Measure, MeasureSlot, Project } from "./project";
 import { STANDARD_BASS_TUNING } from "./project";
 
-describe("placeNoteAt", () => {
-  it("places a Note at tick 0 and backfills the rest of a whole-rest measure", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "rest", duration: "whole" }],
-    };
+const FOUR_FOUR = { numerator: 4, denominator: 4 };
 
-    const result = placeNoteAt(measure, 0, { kind: "note", string: 1, fret: 3, duration: "eighth" });
+function measureOf(...slots: MeasureSlot[]): Measure {
+  return { timeSignature: FOUR_FOUR, slots };
+}
 
-    // A whole rest is 16 sixteenth-note ticks; an eighth note is 2, leaving
-    // 14 ticks to backfill, greedily as half(8) + quarter(4) + eighth(2).
-    expect(result.slots).toEqual([
-      { kind: "note", string: 1, fret: 3, duration: "eighth" },
-      { kind: "rest", duration: "half" },
-      { kind: "rest", duration: "quarter" },
-      { kind: "rest", duration: "eighth" },
-    ]);
+const A: MeasureSlot = { kind: "note", string: 4, fret: 5, duration: "quarter" };
+const B: MeasureSlot = { kind: "rest", duration: "eighth" };
+const C: MeasureSlot = { kind: "note", string: 2, fret: 7, duration: "half" };
+
+describe("setSlotAt", () => {
+  it("replaces the slot at index, leaving its neighbors alone", () => {
+    const result = setSlotAt(measureOf(A, B, C), 1, { kind: "note", string: 1, fret: 3, duration: "eighth" });
+
+    expect(result.slots).toEqual([A, { kind: "note", string: 1, fret: 3, duration: "eighth" }, C]);
   });
 
-  it("backfills a leading gap when the Note doesn't start at tick 0", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "rest", duration: "whole" }],
-    };
+  it("appends when index is one past the last slot", () => {
+    const result = setSlotAt(measureOf(A), 1, B);
 
-    // Quarter note (4 ticks) placed at tick 4 of a 16-tick whole rest:
-    // 4 ticks before it (-> a quarter rest) and 8 ticks after (-> a half rest).
-    const result = placeNoteAt(measure, 4, { kind: "note", string: 2, fret: 5, duration: "quarter" });
-
-    expect(result.slots).toEqual([
-      { kind: "rest", duration: "quarter" },
-      { kind: "note", string: 2, fret: 5, duration: "quarter" },
-      { kind: "rest", duration: "half" },
-    ]);
+    expect(result.slots).toEqual([A, B]);
   });
 
-  it("overwrites an existing Note it overlaps, leaving untouched Notes before it alone", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [
-        { kind: "note", string: 1, fret: 0, duration: "eighth" }, // ticks 0-2
-        { kind: "note", string: 1, fret: 2, duration: "eighth" }, // ticks 2-4
-      ],
-    };
+  it("never caps a Measure at its time signature (ADR-0006)", () => {
+    const full = measureOf(A, A, A, A);
 
-    // Half note (8 ticks) at tick 2 fully overlaps the second eighth note
-    // (2-4) but not the first (ends exactly at 2, no overlap) - the second
-    // note is replaced outright, and the new note simply extends past the
-    // Measure's previous 4-tick total (overflow allowed, ADR-0004).
-    const result = placeNoteAt(measure, 2, { kind: "note", string: 3, fret: 5, duration: "half" });
-
-    expect(result.slots).toEqual([
-      { kind: "note", string: 1, fret: 0, duration: "eighth" },
-      { kind: "note", string: 3, fret: 5, duration: "half" },
-    ]);
-  });
-
-  it("removes every Note it overlaps and backfills both edges of the gap", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [
-        { kind: "note", string: 1, fret: 0, duration: "eighth" }, // ticks 0-2
-        { kind: "note", string: 1, fret: 2, duration: "eighth" }, // ticks 2-4
-        { kind: "note", string: 1, fret: 4, duration: "eighth" }, // ticks 4-6
-      ],
-    };
-
-    // Quarter note (4 ticks) at tick 1 overlaps all three eighth notes
-    // (combined span 0-6): 1 tick before it and 1 tick after, each too short
-    // for anything but a sixteenth rest.
-    const result = placeNoteAt(measure, 1, { kind: "note", string: 2, fret: 7, duration: "quarter" });
-
-    expect(result.slots).toEqual([
-      { kind: "rest", duration: "sixteenth" },
-      { kind: "note", string: 2, fret: 7, duration: "quarter" },
-      { kind: "rest", duration: "sixteenth" },
-    ]);
+    expect(setSlotAt(full, 4, A).slots).toHaveLength(5);
   });
 });
 
-describe("changeDuration", () => {
-  it("shrinks a Note's duration, backfilling the freed ticks with Rests", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [
-        { kind: "note", string: 1, fret: 3, duration: "quarter" }, // ticks 0-4
-        { kind: "rest", duration: "quarter" }, // ticks 4-8
-      ],
-    };
-
-    const result = changeDuration(measure, 0, "eighth");
-
-    // Fret and string untouched; only the duration shrinks (4 -> 2 ticks),
-    // freeing 2 ticks that get backfilled as an eighth rest, ahead of the
-    // untouched quarter rest that was already there.
-    expect(result.slots).toEqual([
-      { kind: "note", string: 1, fret: 3, duration: "eighth" },
-      { kind: "rest", duration: "eighth" },
-      { kind: "rest", duration: "quarter" },
-    ]);
+describe("insertSlotAt", () => {
+  it("inserts before the slot at index, moving later slots back", () => {
+    expect(insertSlotAt(measureOf(A, C), 1, B).slots).toEqual([A, B, C]);
   });
 
-  it("grows a Note's duration, overwriting whatever it now overlaps", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [
-        { kind: "note", string: 2, fret: 1, duration: "eighth" }, // ticks 0-2
-        { kind: "rest", duration: "whole" }, // ticks 2-18 (past the measure - fine, unvalidated per ADR-0004)
-      ],
-    };
-
-    const result = changeDuration(measure, 0, "quarter");
-
-    // Growing to 4 ticks eats into the rest that followed; the leftover
-    // 14 ticks of that rest are backfilled the same way placeNoteAt always
-    // does (half + quarter + eighth).
-    expect(result.slots).toEqual([
-      { kind: "note", string: 2, fret: 1, duration: "quarter" },
-      { kind: "rest", duration: "half" },
-      { kind: "rest", duration: "quarter" },
-      { kind: "rest", duration: "eighth" },
-    ]);
-  });
-
-  it("does nothing when tick isn't the start of a Note", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "rest", duration: "whole" }],
-    };
-
-    expect(changeDuration(measure, 0, "quarter")).toEqual(measure);
-    expect(changeDuration(measure, 4, "quarter")).toEqual(measure);
-  });
-
-  it("does nothing when tick falls inside a Note's span without being its start", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "note", string: 1, fret: 3, duration: "quarter" }], // ticks 0-4
-    };
-
-    expect(changeDuration(measure, 2, "eighth")).toEqual(measure);
+  it("appends when index is one past the last slot", () => {
+    expect(insertSlotAt(measureOf(A), 1, B).slots).toEqual([A, B]);
   });
 });
 
-describe("placeRestAt", () => {
-  it("places a Rest at tick 0, backfilling the remainder the same way placeNoteAt does", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "rest", duration: "whole" }],
-    };
-
-    const result = placeRestAt(measure, 0, "quarter");
-
-    expect(result.slots).toEqual([
-      { kind: "rest", duration: "quarter" },
-      { kind: "rest", duration: "half" },
-      { kind: "rest", duration: "quarter" },
-    ]);
+describe("removeSlotAt", () => {
+  it("removes the slot at index and closes the gap", () => {
+    expect(removeSlotAt(measureOf(A, B, C), 1).slots).toEqual([A, C]);
   });
 
-  it("overwrites a Note it overlaps, same as placing a Note would", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "note", string: 4, fret: 2, duration: "quarter" }], // ticks 0-4
-    };
+  it("does nothing for an index past the last slot", () => {
+    const measure = measureOf(A);
 
-    const result = placeRestAt(measure, 0, "eighth");
+    expect(removeSlotAt(measure, 1)).toEqual(measure);
+  });
+});
 
-    expect(result.slots).toEqual([{ kind: "rest", duration: "eighth" }, { kind: "rest", duration: "eighth" }]);
+describe("setDurationAt", () => {
+  it("changes a Note's duration, keeping its string and fret", () => {
+    expect(setDurationAt(measureOf(A, B), 0, "sixteenth").slots).toEqual([{ ...A, duration: "sixteenth" }, B]);
+  });
+
+  it("changes a Rest's duration the same way", () => {
+    expect(setDurationAt(measureOf(A, B), 1, "whole").slots).toEqual([A, { kind: "rest", duration: "whole" }]);
+  });
+
+  it("does nothing for an index past the last slot", () => {
+    const measure = measureOf(A);
+
+    expect(setDurationAt(measure, 1, "whole")).toEqual(measure);
+  });
+});
+
+describe("createEmptyMeasure", () => {
+  it("starts with no slots at all (ADR-0006)", () => {
+    expect(createEmptyMeasure()).toEqual({ timeSignature: FOUR_FOUR, slots: [] });
   });
 });
 
 describe("addMeasure", () => {
-  it("appends a fresh empty 4/4 Measure, leaving the rest of the Project untouched", () => {
-    const project: Project = {
-      title: "Song",
-      tuning: STANDARD_BASS_TUNING,
-      measures: [
-        {
-          timeSignature: { numerator: 4, denominator: 4 },
-          slots: [{ kind: "note", string: 1, fret: 3, duration: "quarter" }],
-        },
-      ],
-    };
+  it("appends an empty 4/4 Measure, leaving the rest of the Project untouched", () => {
+    const project: Project = { title: "Song", tuning: STANDARD_BASS_TUNING, measures: [measureOf(A)] };
 
     const result = addMeasure(project);
 
     expect(result.title).toBe("Song");
     expect(result.tuning).toBe(STANDARD_BASS_TUNING);
-    expect(result.measures).toHaveLength(2);
-    expect(result.measures[0]).toEqual(project.measures[0]);
-    expect(result.measures[1]).toEqual({
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "rest", duration: "whole" }],
-    });
+    expect(result.measures).toEqual([measureOf(A), { timeSignature: FOUR_FOUR, slots: [] }]);
   });
 
   it("appends a Measure in the given TimeSignature when one is passed", () => {
-    const project: Project = {
-      title: "Song",
-      tuning: STANDARD_BASS_TUNING,
-      measures: [],
-    };
+    const project: Project = { title: "Song", tuning: STANDARD_BASS_TUNING, measures: [] };
 
     const result = addMeasure(project, { numerator: 3, denominator: 4 });
 
-    expect(result.measures).toHaveLength(1);
-    expect(result.measures[0]).toEqual({
-      timeSignature: { numerator: 3, denominator: 4 },
-      slots: [{ kind: "rest", duration: "whole" }],
-    });
-  });
-});
-
-describe("ticksPerMeasure", () => {
-  it.each([
-    [{ numerator: 4, denominator: 4 }, 16],
-    [{ numerator: 3, denominator: 4 }, 12],
-    [{ numerator: 6, denominator: 8 }, 12],
-    [{ numerator: 2, denominator: 4 }, 8],
-  ])("returns %o -> %i ticks", (timeSignature, expected) => {
-    expect(ticksPerMeasure(timeSignature)).toBe(expected);
-  });
-});
-
-describe("deleteNoteAt", () => {
-  it("replaces the Note at tick with a Rest of the same duration, leaving neighbors alone", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [
-        { kind: "note", string: 1, fret: 3, duration: "eighth" }, // ticks 0-2
-        { kind: "note", string: 2, fret: 5, duration: "quarter" }, // ticks 2-6
-      ],
-    };
-
-    const result = deleteNoteAt(measure, 2);
-
-    expect(result.slots).toEqual([
-      { kind: "note", string: 1, fret: 3, duration: "eighth" },
-      { kind: "rest", duration: "quarter" },
-    ]);
-  });
-
-  it("does nothing when tick isn't the start of a Note", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "rest", duration: "whole" }],
-    };
-
-    expect(deleteNoteAt(measure, 0)).toEqual(measure);
-  });
-
-  it("does nothing when tick falls inside a Note's span without being its start", () => {
-    const measure: Measure = {
-      timeSignature: { numerator: 4, denominator: 4 },
-      slots: [{ kind: "note", string: 1, fret: 3, duration: "quarter" }], // ticks 0-4
-    };
-
-    expect(deleteNoteAt(measure, 2)).toEqual(measure);
+    expect(result.measures).toEqual([{ timeSignature: { numerator: 3, denominator: 4 }, slots: [] }]);
   });
 });

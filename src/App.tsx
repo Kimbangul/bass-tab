@@ -1,18 +1,10 @@
 import { AlphaTabApi } from "@coderline/alphatab";
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import {
-  addMeasure,
-  changeDuration,
-  createEmptyMeasure,
-  DEFAULT_NOTE_DURATION,
-  DEFAULT_REST_DURATION,
-  deleteNoteAt,
-  placeNoteAt,
-  placeRestAt,
-} from "./domain/editing";
+import { addMeasure, createEmptyMeasure, setDurationAt } from "./domain/editing";
+import { applyEntryInput, INITIAL_ENTRY_STATE, type EntryInput, type EntryState } from "./domain/entry";
 import { clear, createHistory, push, redo, undo, type History } from "./domain/history";
-import type { Duration, Project, StringNumber, TimeSignature } from "./domain/project";
+import type { Duration, Project, TimeSignature } from "./domain/project";
 import { STANDARD_BASS_TUNING } from "./domain/project";
 import { MeasureGrid } from "./editor/MeasureGrid";
 import { exportJpg } from "./export/exportJpg";
@@ -22,9 +14,8 @@ import { projectToScore } from "./rendering/projectToScore";
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 
-// Denominators that evenly divide the grid's sixteenth-note tick resolution
-// (ticksPerMeasure in domain/editing.ts) - any other denominator would need a
-// finer tick unit than the app supports.
+// The time signature is only a label on a Measure (ADR-0006); these are the
+// denominators the picker offers.
 const TIME_SIGNATURE_DENOMINATORS = [2, 4, 8, 16] as const;
 const MAX_TIME_SIGNATURE_NUMERATOR = 32;
 const DEFAULT_TIME_SIGNATURE: TimeSignature = { numerator: 4, denominator: 4 };
@@ -61,6 +52,11 @@ function App() {
   // non-default signature in a row doesn't mean reselecting it every time.
   const [nextTimeSignature, setNextTimeSignature] = useState<TimeSignature>(DEFAULT_TIME_SIGNATURE);
   const [history, setHistory] = useState<History<Project>>(createHistory);
+  // Cursor, pending fret digits and last used duration for keyboard entry
+  // (spec .scratch/sequence-editing). Every grid key or click goes through
+  // applyEntryInput.
+  const [entry, setEntry] = useState<EntryState>(INITIAL_ENTRY_STATE);
+  const editorRef = useRef<HTMLDivElement>(null);
   // Gates auto-save until the restore attempt below finishes - otherwise the
   // initial empty Project could get auto-saved first and overwrite a real
   // one before it's ever read back.
@@ -123,6 +119,7 @@ function App() {
       const step = e.shiftKey ? redo(history, project) : undo(history, project);
       setHistory(step.history);
       setProject(step.value);
+      deselect();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -136,55 +133,51 @@ function App() {
     setHistory((h) => push(h, project));
   }
 
+  // After undo/redo or a Load the cursor may point past the end of a
+  // Measure that no longer has those columns, so drop the selection.
+  function deselect() {
+    setEntry((prev) => ({ ...prev, cursor: null, digits: "" }));
+  }
+
   function handleUndo() {
     const step = undo(history, project);
     setHistory(step.history);
     setProject(step.value);
+    deselect();
   }
 
   function handleRedo() {
     const step = redo(history, project);
     setHistory(step.history);
     setProject(step.value);
+    deselect();
   }
 
-  function handlePlaceNote(measureIndex: number, tick: number, string: StringNumber, fret: number) {
+  function dispatchEntry(input: EntryInput) {
+    const result = applyEntryInput(entry, project, input);
+    if (result.pushHistory) pushHistory();
+    setProject(result.project);
+    setEntry(result.state);
+  }
+
+  // Maps the editor's keystrokes to entry inputs. Modified keys (Ctrl+Z and
+  // friends) are left to their own handlers.
+  function handleEditorKeyDown(e: React.KeyboardEvent) {
+    if (!entry.cursor || e.ctrlKey || e.metaKey || e.altKey) return;
+    let input: EntryInput | null = null;
+    if (/^[0-9]$/.test(e.key)) input = { type: "digit", digit: Number(e.key) };
+    else if (e.key === "Enter") input = { type: "enter" };
+    else if (e.key === "Backspace" || e.key === "Delete") input = { type: "backspace" };
+    if (!input) return;
+    e.preventDefault();
+    dispatchEntry(input);
+  }
+
+  function handleChangeDuration(measureIndex: number, column: number, duration: Duration) {
     pushHistory();
     setProject((prev) => {
       const measures = [...prev.measures];
-      measures[measureIndex] = placeNoteAt(measures[measureIndex], tick, {
-        kind: "note",
-        string,
-        fret,
-        duration: DEFAULT_NOTE_DURATION,
-      });
-      return { ...prev, measures };
-    });
-  }
-
-  function handlePlaceRest(measureIndex: number, tick: number) {
-    pushHistory();
-    setProject((prev) => {
-      const measures = [...prev.measures];
-      measures[measureIndex] = placeRestAt(measures[measureIndex], tick, DEFAULT_REST_DURATION);
-      return { ...prev, measures };
-    });
-  }
-
-  function handleChangeDuration(measureIndex: number, tick: number, duration: Duration) {
-    pushHistory();
-    setProject((prev) => {
-      const measures = [...prev.measures];
-      measures[measureIndex] = changeDuration(measures[measureIndex], tick, duration);
-      return { ...prev, measures };
-    });
-  }
-
-  function handleDeleteNote(measureIndex: number, tick: number) {
-    pushHistory();
-    setProject((prev) => {
-      const measures = [...prev.measures];
-      measures[measureIndex] = deleteNoteAt(measures[measureIndex], tick);
+      measures[measureIndex] = setDurationAt(measures[measureIndex], column, duration);
       return { ...prev, measures };
     });
   }
@@ -235,6 +228,7 @@ function App() {
     reader.onload = () => {
       try {
         setProject(parseSavedProject(String(reader.result)));
+        deselect();
         // A Load opens a different document - its own undo history, not this
         // one's, so the two can never mix (spec: undo-redo/03).
         setHistory(clear());
@@ -266,16 +260,27 @@ function App() {
       <button type="button" onClick={handleRedo} disabled={history.future.length === 0}>
         Redo
       </button>
-      {project.measures.map((measure, index) => (
-        <MeasureGrid
-          key={index}
-          measure={measure}
-          onPlaceNote={(tick, string, fret) => handlePlaceNote(index, tick, string, fret)}
-          onPlaceRest={(tick) => handlePlaceRest(index, tick)}
-          onChangeDuration={(tick, duration) => handleChangeDuration(index, tick, duration)}
-          onDeleteNote={(tick) => handleDeleteNote(index, tick)}
-        />
-      ))}
+      <div
+        ref={editorRef}
+        className="measure-editor"
+        tabIndex={0}
+        onKeyDown={handleEditorKeyDown}
+        onBlur={(e) => {
+          // Focus moving between parts of the editor isn't leaving it.
+          if (!editorRef.current?.contains(e.relatedTarget as Node | null)) dispatchEntry({ type: "blur" });
+        }}
+      >
+        {project.measures.map((measure, index) => (
+          <MeasureGrid
+            key={index}
+            measure={measure}
+            cursor={entry.cursor?.measure === index ? entry.cursor : null}
+            digits={entry.digits}
+            onSelect={(column, string) => dispatchEntry({ type: "select", cursor: { measure: index, column, string } })}
+            onChangeDuration={(column, duration) => handleChangeDuration(index, column, duration)}
+          />
+        ))}
+      </div>
       <span className="time-signature-picker">
         <select
           aria-label="New measure's time signature numerator"
