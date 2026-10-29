@@ -57,7 +57,7 @@ Nothing is blocked and nothing is flagged when a Measure is longer or shorter th
 22. As a bass player, I want a new Measure to start empty (just the append column), so that I'm not handed a whole Rest I have to clear first.
 23. As a bass player, I want Projects I saved under the old grid to open and keep working, so that switching models doesn't cost me my work.
 24. As a bass player, I want the AlphaTab notation to keep rendering for Measures that are empty, short, or overfull, so that the score preview never breaks while I'm mid-entry.
-25. As a developer, I want the whole keyboard entry flow implemented as a pure reducer, so that behaviors like "`5 Space Space Enter` gives a 1/4 Note at fret 5 and moves the cursor" are unit-testable without the DOM.
+25. As a developer, I want the whole keyboard entry flow implemented as a pure reducer, so that behaviors like "`5 Space Space Enter` gives a 1/8 Note at fret 5 and moves the cursor" are unit-testable without the DOM.
 
 ## Implementation Decisions
 
@@ -101,7 +101,7 @@ Nothing is blocked and nothing is flagged when a Measure is longer or shorter th
 
 - A good test asserts only on returned values: the `Measure`/`Project` slots, the reducer's `EntryState`, and its "push history?" flag. It never asserts on React, the DOM, or AlphaTab internals beyond the Score shape.
 - **Keyboard entry reducer** (new, test-first): the primary seam. Each test feeds a key sequence and checks the result. Examples:
-  - `5 Space Space Enter` gives a 1/4 fret-5 Note and puts the cursor on the next column.
+  - `5 Space Space Enter` (last used 1/16) gives a 1/8 fret-5 Note, since the first Space only confirms, and puts the cursor on the next column.
   - `Space Space` on the append column gives a selected Rest one step longer than the last used duration.
   - Shift+Space wraps 1/16 back to 1/1.
   - Replacing a column keeps its duration.

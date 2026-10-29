@@ -167,6 +167,7 @@ function App() {
     let input: EntryInput | null = null;
     if (/^[0-9]$/.test(e.key)) input = { type: "digit", digit: Number(e.key) };
     else if (e.key === "Enter") input = { type: "enter" };
+    else if (e.key === " ") input = { type: "space", reverse: e.shiftKey };
     else if (e.key === "Backspace" || e.key === "Delete") input = { type: "backspace" };
     if (!input) return;
     e.preventDefault();

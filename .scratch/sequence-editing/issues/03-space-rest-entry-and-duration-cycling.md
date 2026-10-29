@@ -12,7 +12,8 @@
 **Status:** ready-for-agent
 
 - [ ] The cycle order is 1/16 → 1/8 → 1/4 → 1/2 → 1/1 → 1/16 and wraps. Shift+Space walks the same order backward
-- [ ] `5 Space Space Enter` (last used 1/16) gives a fret-5 1/4 Note and leaves the cursor on the next column
+- [ ] `5 Space Space Enter` (last used 1/16) gives a fret-5 1/8 Note (the first Space only confirms, the second cycles once) and leaves the cursor on the next column
+- [ ] An Enter with nothing typed moves to the next column only if this entry already changed something (a confirmed Note, or a placed or cycled Rest); otherwise it does nothing
 - [ ] Space with an empty entry on the append column appends a Rest of the last used duration and keeps it selected
 - [ ] Space on an existing Note or Rest with an empty entry cycles its duration
 - [ ] Every duration reached by cycling becomes the last used duration for the next new column

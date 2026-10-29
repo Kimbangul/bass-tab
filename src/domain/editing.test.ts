@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { addMeasure, createEmptyMeasure, insertSlotAt, removeSlotAt, setDurationAt, setSlotAt } from "./editing";
+import {
+  addMeasure,
+  createEmptyMeasure,
+  insertSlotAt,
+  nextDuration,
+  previousDuration,
+  removeSlotAt,
+  setDurationAt,
+  setSlotAt,
+} from "./editing";
 import type { Measure, MeasureSlot, Project } from "./project";
 import { STANDARD_BASS_TUNING } from "./project";
 
@@ -94,5 +103,25 @@ describe("addMeasure", () => {
     const result = addMeasure(project, { numerator: 3, denominator: 4 });
 
     expect(result.measures).toEqual([{ timeSignature: { numerator: 3, denominator: 4 }, slots: [] }]);
+  });
+});
+
+describe("duration cycle", () => {
+  it.each([
+    ["sixteenth", "eighth"],
+    ["eighth", "quarter"],
+    ["quarter", "half"],
+    ["half", "whole"],
+    ["whole", "sixteenth"],
+  ] as const)("nextDuration(%s) is %s, wrapping after whole", (from, to) => {
+    expect(nextDuration(from)).toBe(to);
+  });
+
+  it.each([
+    ["sixteenth", "whole"],
+    ["eighth", "sixteenth"],
+    ["whole", "half"],
+  ] as const)("previousDuration(%s) is %s, wrapping before sixteenth", (from, to) => {
+    expect(previousDuration(from)).toBe(to);
   });
 });

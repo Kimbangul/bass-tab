@@ -11,6 +11,20 @@ const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
 /** Every Duration, largest first - the order the duration toolbar lists them in. */
 export const DURATIONS_LARGEST_FIRST: readonly Duration[] = ["whole", "half", "quarter", "eighth", "sixteenth"];
 
+/** The order Space cycles a duration through, shortest first. */
+const DURATION_CYCLE: readonly Duration[] = ["sixteenth", "eighth", "quarter", "half", "whole"];
+
+/** One step longer, wrapping from whole back to sixteenth. */
+export function nextDuration(duration: Duration): Duration {
+  return DURATION_CYCLE[(DURATION_CYCLE.indexOf(duration) + 1) % DURATION_CYCLE.length];
+}
+
+/** One step shorter, wrapping from sixteenth back to whole. */
+export function previousDuration(duration: Duration): Duration {
+  const length = DURATION_CYCLE.length;
+  return DURATION_CYCLE[(DURATION_CYCLE.indexOf(duration) - 1 + length) % length];
+}
+
 /** A fresh Measure: no slots at all (ADR-0006). */
 export function createEmptyMeasure(timeSignature: TimeSignature = FOUR_FOUR): Measure {
   return { timeSignature, slots: [] };

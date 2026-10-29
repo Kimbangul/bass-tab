@@ -108,3 +108,102 @@ describe("confirming and abandoning an entry", () => {
     expect(pushes).toBe(3);
   });
 });
+
+const space: EntryInput = { type: "space", reverse: false };
+const shiftSpace: EntryInput = { type: "space", reverse: true };
+
+describe("Space", () => {
+  it("confirms a typed Note and keeps it selected; the next Space makes it one step longer", () => {
+    const { project, state } = run(projectOf([]), [select(0, 0), digit(5), space, space, enter]);
+
+    // first Space only confirms (1/16), the second cycles once (1/8)
+    expect(project.measures[0].slots).toEqual([{ kind: "note", string: 4, fret: 5, duration: "eighth" }]);
+    expect(state.cursor).toEqual({ measure: 0, column: 1, string: 4 });
+  });
+
+  it("appends a Rest of the last used duration on the append column, and keeps it selected", () => {
+    const { project, state } = run(projectOf([]), [select(0, 0), space]);
+
+    expect(project.measures[0].slots).toEqual([{ kind: "rest", duration: "sixteenth" }]);
+    expect(state.cursor).toEqual({ measure: 0, column: 0, string: 4 });
+  });
+
+  it("cycles a just-placed Rest, then Enter moves on to the next column", () => {
+    const { project, state } = run(projectOf([]), [select(0, 0), space, space, space, enter]);
+
+    expect(project.measures[0].slots).toEqual([{ kind: "rest", duration: "quarter" }]);
+    expect(state.cursor).toEqual({ measure: 0, column: 1, string: 4 });
+  });
+
+  it("cycles an existing Note or Rest when nothing is typed", () => {
+    const start = projectOf([
+      { kind: "note", string: 4, fret: 0, duration: "half" },
+      { kind: "rest", duration: "eighth" },
+    ]);
+
+    const { project } = run(start, [select(0, 0), space, select(0, 1), space]);
+
+    expect(project.measures[0].slots).toEqual([
+      { kind: "note", string: 4, fret: 0, duration: "whole" },
+      { kind: "rest", duration: "quarter" },
+    ]);
+  });
+
+  it("cycles the other way on Shift+Space, wrapping from 1/16 to 1/1", () => {
+    const start = projectOf([{ kind: "note", string: 4, fret: 0, duration: "sixteenth" }]);
+
+    const { project } = run(start, [select(0, 0), shiftSpace]);
+
+    expect(project.measures[0].slots[0]).toMatchObject({ duration: "whole" });
+  });
+
+  it("wraps from 1/1 back to 1/16 going forward", () => {
+    const start = projectOf([{ kind: "rest", duration: "whole" }]);
+
+    const { project } = run(start, [select(0, 0), space]);
+
+    expect(project.measures[0].slots[0]).toMatchObject({ duration: "sixteenth" });
+  });
+
+  it("makes every cycled duration the last used one for the next new column", () => {
+    const { project } = run(projectOf([]), [select(0, 0), digit(3), space, space, space, enter, digit(5), enter]);
+
+    expect(project.measures[0].slots[1]).toEqual({ kind: "note", string: 4, fret: 5, duration: "quarter" });
+  });
+
+  it("moves later columns later in time rather than erasing them", () => {
+    const later = { kind: "note", string: 2, fret: 9, duration: "quarter" } as const;
+    const start = projectOf([{ kind: "rest", duration: "eighth" }, later]);
+
+    const { project } = run(start, [select(0, 0), space, space, space]);
+
+    expect(project.measures[0].slots).toEqual([{ kind: "rest", duration: "whole" }, later]);
+  });
+
+  it("asks for one undo snapshot per entry session, however many Space presses it has", () => {
+    const { pushes } = run(projectOf([]), [
+      select(0, 0),
+      digit(5),
+      space,
+      space,
+      shiftSpace,
+      space,
+      enter, // session 1 ends - cursor moves on
+      space,
+      space,
+      space, // session 2: a Rest and two cycles
+      select(0, 0),
+      space, // session 3: cycling the first Note again
+    ]);
+
+    expect(pushes).toBe(3);
+  });
+
+  it("still does nothing on an empty Enter when the entry hasn't changed anything", () => {
+    const start = projectOf([{ kind: "rest", duration: "quarter" }]);
+
+    const { state } = run(start, [select(0, 0), enter]);
+
+    expect(state.cursor?.column).toBe(0);
+  });
+});
